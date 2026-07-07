@@ -6,8 +6,12 @@
 <title>linjiade 的转换器</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-<script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+if(typeof pdfjsLib!=='undefined'){
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+</script>
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx@9.1.1/build/index.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
@@ -372,13 +376,13 @@ hook($('go'),'click',async()=>{
     $('progD').textContent='正在解析文件...';
 
     // === PDF ===
-    if(k==='pdf->txt'){blob=await pdf2txt(sf)}
-    else if(k==='pdf->docx'){blob=await pdf2docx(sf)}
-    else if(k==='pdf->html'){blob=await pdf2html(sf)}
+    if(k==='pdf->txt'){try{blob=await pdf2txt(sf)}catch(e){throw new Error('PDF 解析失败: '+e.message)}}
+    else if(k==='pdf->docx'){try{blob=await pdf2docx(sf)}catch(e){throw new Error('PDF 转 Word 失败: '+e.message)}}
+    else if(k==='pdf->html'){try{blob=await pdf2html(sf)}catch(e){throw new Error('PDF 转 HTML 失败: '+e.message)}}
     // === Word ===
-    else if(k==='docx->pdf'||k==='doc->pdf'){blob=await word2pdf(sf)}
-    else if(k==='docx->html'||k==='doc->html'){blob=await word2html(sf)}
-    else if(k==='docx->txt'||k==='doc->txt'){blob=await word2txt(sf)}
+    else if(k==='docx->pdf'||k==='doc->pdf'){try{blob=await word2pdf(sf)}catch(e){throw new Error('Word 转 PDF 失败: '+e.message)}}
+    else if(k==='docx->html'||k==='doc->html'){try{blob=await word2html(sf)}catch(e){throw new Error('Word 转 HTML 失败: '+e.message)}}
+    else if(k==='docx->txt'||k==='doc->txt'){try{blob=await word2txt(sf)}catch(e){throw new Error('Word 转文本失败: '+e.message)}}
     // === PPT ===
     else if(k==='pptx->pdf'){blob=await ppt2pdf(sf)}
     else if(k==='pptx->png'){blob=await ppt2png(sf)}
@@ -426,33 +430,60 @@ function show(blob,name,c){
   const a=document.createElement('a');a.href=u;a.download=name;a.click();
 }
 
-// ====== PDF Engine (pdf.js v3) ======
+// ====== PDF Engine ======
 async function pdfPages(f){
-  $('progD').textContent='正在读取 PDF 页面...';
-  const buf=await f.arrayBuffer();
-  const doc=await pdfjsLib.getDocument({data:buf}).promise;
-  const pages=[];
-  for(let i=1;i<=doc.numPages;i++){
-    $('progD').textContent=`正在读取第 ${i}/${doc.numPages} 页...`;
-    const pg=await doc.getPage(i);
-    const tc=await pg.getTextContent();
-    // 保留位置信息用于更好的布局
-    const items=tc.items;
-    if(!items.length){pages.push({text:'',items:[]});continue}
-    // 按 Y 坐标分组行
-    const lines=[];let curLine=[];let lastY=null;
-    items.forEach(item=>{
-      const y=Math.round(item.transform[5]);
-      if(lastY!==null&&Math.abs(y-lastY)>3){
-        lines.push(curLine.sort((a,b)=>a.x-b.x).map(i=>i.str).join(''));
-        curLine=[];
-      }
-      curLine.push({str:item.str,x:item.transform[4],y});
-      lastY=y;
+  $('progD').textContent='正在加载 PDF 引擎...';
+  if(typeof pdfjsLib==='undefined'){
+    // 尝试动态加载
+    await new Promise((ok,no)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';ok()};
+      s.onerror=()=>no(new Error('PDF 引擎加载失败，请检查网络'));
+      document.head.appendChild(s);
     });
-    if(curLine.length)lines.push(curLine.sort((a,b)=>a.x-b.x).map(i=>i.str).join(''));
-    pages.push({text:lines.join('\n'),items});
   }
+  if(!pdfjsLib)throw new Error('PDF 引擎不可用');
+  $('progD').textContent='正在读取 PDF 文件...';
+  const buf=await f.arrayBuffer();
+  let doc;
+  try{
+    doc=await pdfjsLib.getDocument({data:buf,useWorkerFetch:false,isEvalSupported:false}).promise;
+  }catch(e){
+    // worker 失败则禁用 worker 重试
+    $('progD').textContent='Worker 加载失败，使用主线程重试...';
+    pdfjsLib.GlobalWorkerOptions.workerSrc='';
+    doc=await pdfjsLib.getDocument({data:buf,disableAutoFetch:true}).promise;
+  }
+  const pages=[];
+  const total=doc.numPages;
+  for(let i=1;i<=total;i++){
+    $('progD').textContent=`正在解析第 ${i}/${total} 页...`;
+    try{
+      const pg=await doc.getPage(i);
+      const tc=await pg.getTextContent();
+      const items=tc.items;
+      if(!items||!items.length){pages.push({text:'',items:[]});continue}
+      // 按 Y 坐标分组行，保留布局
+      const lines=[];let curLine=[];let lastY=null;
+      items.forEach(item=>{
+        if(!item.str)return;
+        const y=Math.round(item.transform[5]);
+        if(lastY!==null&&Math.abs(y-lastY)>5){
+          lines.push(curLine.sort((a,b)=>a.x-b.x).map(i=>i.str).join(''));
+          curLine=[];
+        }
+        curLine.push({str:item.str,x:item.transform[4],y});
+        lastY=y;
+      });
+      if(curLine.length)lines.push(curLine.sort((a,b)=>a.x-b.x).map(i=>i.str).join(''));
+      pages.push({text:lines.join('\n'),items});
+    }catch(e){
+      console.warn(`Page ${i} failed:`,e);
+      pages.push({text:`[第 ${i} 页读取失败]`,items:[]});
+    }
+  }
+  doc.destroy();
   return pages;
 }
 
