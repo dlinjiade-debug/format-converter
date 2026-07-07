@@ -5,388 +5,317 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>linjiade 的转换器</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';</script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx@9.1.1/build/index.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.mjs" type="module"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#0a0a0f;--surface:rgba(255,255,255,0.04);--surface2:rgba(255,255,255,0.07);
-  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.12);
-  --text:#f0f0f5;--text2:#a0a0b8;--text3:#6b6b80;
-  --accent:#8b5cf6;--accent2:#a78bfa;--accent-glow:rgba(139,92,246,0.25);
-  --rose:#f43f5e;--rose-glow:rgba(244,63,94,0.2);
-  --emerald:#10b981;--emerald-glow:rgba(16,185,129,0.2);
-  --amber:#f59e0b;--amber-glow:rgba(245,158,11,0.2);
-  --sky:#0ea5e9;--sky-glow:rgba(14,165,233,0.2);
-  --radius:16px;--radius-lg:24px;
-  --shadow:0 8px 32px rgba(0,0,0,0.3);
-  --font-serif:'Playfair Display',Georgia,serif;
-  --font-sans:'Plus Jakarta Sans','SF Pro Display','Microsoft YaHei',system-ui,sans-serif;
+  --bg:#06060b;--surface:rgba(255,255,255,0.035);--surface2:rgba(255,255,255,0.06);
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
+  --text:#eeeef2;--text2:#9898b0;--text3:#5c5c72;
+  --violet:#8b5cf6;--violet2:#a78bfa;--violet-bg:rgba(139,92,246,0.1);
+  --rose:#f43f5e;--emerald:#10b981;--amber:#f59e0b;--sky:#0ea5e9;
+  --r:16px;--r2:24px;
+  --sans:'Plus Jakarta Sans','Microsoft YaHei',system-ui,sans-serif;
+  --serif:'Playfair Display',Georgia,serif;
+  --mono:'JetBrains Mono','Consolas',monospace;
 }
-html{font-size:16px;-webkit-font-smoothing:antialiased}
-body{font-family:var(--font-sans);background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh;overflow-x:hidden;position:relative}
+html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh;overflow-x:hidden}
 
-/* ===== Animated Background ===== */
-body::before{content:'';position:fixed;inset:0;background:
-  radial-gradient(ellipse 600px 600px at 20% 20%,rgba(139,92,246,0.12),transparent),
-  radial-gradient(ellipse 500px 500px at 80% 80%,rgba(244,63,94,0.08),transparent),
-  radial-gradient(ellipse 400px 400px at 60% 30%,rgba(14,165,233,0.06),transparent);
-  animation:meshMove 20s ease-in-out infinite alternate;pointer-events:none;z-index:0}
-@keyframes meshMove{
-  0%{transform:translate(0,0) scale(1)}
-  33%{transform:translate(-30px,20px) scale(1.05)}
-  66%{transform:translate(20px,-15px) scale(0.98)}
-  100%{transform:translate(-10px,10px) scale(1.02)}
-}
-body::after{content:'';position:fixed;inset:0;background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:0;opacity:0.5}
+/* BG */
+.bg{position:fixed;inset:0;pointer-events:none;z-index:0}
+.bg::before{content:'';position:absolute;inset:-20%;
+  background:radial-gradient(ellipse 700px 600px at 25% 15%,rgba(139,92,246,.13),transparent),
+  radial-gradient(ellipse 500px 500px at 75% 85%,rgba(244,63,94,.09),transparent),
+  radial-gradient(ellipse 450px 450px at 55% 45%,rgba(14,165,233,.06),transparent);
+  animation:mesh 22s ease-in-out infinite alternate}
+@keyframes mesh{0%{transform:translate(0,0) scale(1)}50%{transform:translate(-25px,18px) scale(1.04)}100%{transform:translate(15px,-10px) scale(.97)}}
+.bg::after{content:'';position:absolute;inset:0;
+  background:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.025'/%3E%3C/svg%3E");
+  opacity:.6}
+.orb{position:absolute;border-radius:50%;filter:blur(100px);animation:float 28s ease-in-out infinite}
+.orb.a{width:500px;height:500px;background:rgba(139,92,246,.12);top:-8%;left:8%}
+.orb.b{width:420px;height:420px;background:rgba(244,63,94,.1);bottom:5%;right:5%;animation-delay:-10s}
+.orb.c{width:360px;height:360px;background:rgba(14,165,233,.08);top:35%;left:55%;animation-delay:-18s}
+@keyframes float{0%,100%{transform:translate(0,0)}25%{transform:translate(35px,-25px)}50%{transform:translate(-18px,35px)}75%{transform:translate(25px,15px)}}
 
-/* ===== Floating orbs ===== */
-.orbs{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
-.orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:0.15;animation:float 25s ease-in-out infinite}
-.orb:nth-child(1){width:500px;height:500px;background:#8b5cf6;top:-10%;left:10%;animation-delay:0s}
-.orb:nth-child(2){width:400px;height:400px;background:#f43f5e;bottom:-5%;right:10%;animation-delay:-8s}
-.orb:nth-child(3){width:350px;height:350px;background:#0ea5e9;top:40%;left:60%;animation-delay:-15s}
-@keyframes float{
-  0%,100%{transform:translate(0,0) rotate(0deg)}
-  25%{transform:translate(40px,-30px) rotate(5deg)}
-  50%{transform:translate(-20px,40px) rotate(-3deg)}
-  75%{transform:translate(30px,20px) rotate(2deg)}
-}
+/* Layout */
+.page{max-width:840px;margin:0 auto;padding:52px 24px 80px;position:relative;z-index:1}
 
-/* ===== Layout ===== */
-.page{max-width:820px;margin:0 auto;padding:56px 24px 80px;position:relative;z-index:1}
-.hero{text-align:center;margin-bottom:56px}
-.hero-badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent2);
-  background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:999px;padding:6px 18px;margin-bottom:24px;
-  backdrop-filter:blur(10px)}
-.hero-badge::before{content:'';width:6px;height:6px;background:var(--emerald);border-radius:50%;animation:pulse-dot 2s infinite}
-@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
-.hero h1{font-family:var(--font-serif);font-size:clamp(40px,7vw,64px);font-weight:700;letter-spacing:-0.04em;line-height:1.05;margin-bottom:16px;
-  background:linear-gradient(135deg,#f0f0f5 0%,#a78bfa 50%,#f43f5e 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero h1 .thin{font-weight:500;opacity:0.7}
+/* Hero */
+.hero{text-align:center;margin-bottom:52px}
+.badge{display:inline-flex;align-items:center;gap:7px;font:600 11px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;
+  color:var(--violet2);background:var(--violet-bg);border:1px solid rgba(139,92,246,.18);border-radius:999px;padding:7px 18px;margin-bottom:22px;
+  backdrop-filter:blur(12px)}
+.badge::before{content:'';width:6px;height:6px;background:var(--emerald);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+.hero h1{font:700 clamp(38px,7vw,62px)/1.05 var(--serif);letter-spacing:-.04em;margin-bottom:14px;
+  background:linear-gradient(135deg,#eeeef2 0%,#a78bfa 45%,#f43f5e 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero h1 .thin{font-weight:500;opacity:.65}
 .hero p{font-size:15px;color:var(--text2);max-width:480px;margin:0 auto;line-height:1.8}
+.stats{display:flex;justify-content:center;gap:36px;margin-top:28px;flex-wrap:wrap}
+.stat-num{font:700 28px/1 var(--serif);background:linear-gradient(135deg,var(--violet2),var(--rose));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat-lbl{font:500 10px/1 var(--sans);color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
 
-/* ===== Stats bar ===== */
-.stats{display:flex;justify-content:center;gap:32px;margin-top:28px;flex-wrap:wrap}
-.stat{text-align:center}
-.stat-num{font-family:var(--font-serif);font-size:28px;font-weight:700;background:linear-gradient(135deg,var(--accent2),var(--rose));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.stat-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-top:2px}
+/* Card */
+.card{background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:var(--r2);
+  box-shadow:0 8px 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.04);overflow:hidden;
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
 
-/* ===== Card ===== */
-.card{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:var(--radius-lg);
-  box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,0.05);overflow:hidden;
-  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);transition:border-color .3s}
-.card:hover{border-color:var(--border2)}
-
-/* ===== Tabs ===== */
+/* Tabs */
 .tabs{display:flex;padding:6px;gap:4px;border-bottom:1px solid var(--border)}
-.tab{flex:1;padding:12px 8px;border:none;background:transparent;font-family:var(--font-sans);font-size:13px;font-weight:600;
-  color:var(--text3);cursor:pointer;transition:all .3s;border-radius:10px;letter-spacing:0.01em;position:relative}
-.tab:hover{color:var(--text2);background:rgba(255,255,255,0.03)}
-.tab.active{color:var(--text);background:rgba(139,92,246,0.12);box-shadow:0 0 20px rgba(139,92,246,0.1)}
-.card-body{padding:32px}
+.tab{flex:1;padding:12px 8px;border:none;background:0 0;font:600 13px/1 var(--sans);color:var(--text3);
+  cursor:pointer;transition:all .3s;border-radius:10px;letter-spacing:.01em}
+.tab:hover{color:var(--text2);background:rgba(255,255,255,.025)}
+.tab.active{color:var(--text);background:var(--violet-bg);box-shadow:0 0 24px rgba(139,92,246,.08)}
+.body{padding:32px}
 
-/* ===== Dropzone ===== */
-.dropzone{border:1.5px dashed rgba(255,255,255,0.1);border-radius:var(--radius);padding:52px 24px;text-align:center;
-  cursor:pointer;transition:all .4s cubic-bezier(.4,0,.2,1);background:rgba(255,255,255,0.02);position:relative;overflow:hidden}
-.dropzone::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(139,92,246,0.06),transparent 70%);
-  opacity:0;transition:opacity .4s}
-.dropzone:hover::before,.dropzone.dragover::before{opacity:1}
-.dropzone:hover,.dropzone.dragover{border-color:var(--accent);background:rgba(139,92,246,0.04);transform:scale(1.005);
-  box-shadow:0 0 40px rgba(139,92,246,0.08)}
-.dropzone svg{width:44px;height:44px;color:var(--text3);margin-bottom:14px;transition:all .4s}
-.dropzone:hover svg{color:var(--accent2);transform:translateY(-3px)}
-.dropzone .dz-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px}
-.dropzone .dz-sub{font-size:13px;color:var(--text3)}
-.dropzone .dz-sub strong{color:var(--accent2);font-weight:600}
-.dropzone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+/* Dropzone */
+.drop{border:1.5px dashed rgba(255,255,255,.1);border-radius:var(--r);padding:52px 24px;text-align:center;
+  cursor:pointer;transition:all .4s cubic-bezier(.4,0,.2,1);background:rgba(255,255,255,.015);position:relative;overflow:hidden}
+.drop::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(139,92,246,.07),transparent 70%);opacity:0;transition:opacity .4s}
+.drop:hover::before,.drop.over::before{opacity:1}
+.drop:hover,.drop.over{border-color:var(--violet);background:rgba(139,92,246,.03);transform:scale(1.003);box-shadow:0 0 50px rgba(139,92,246,.07)}
+.drop svg{width:44px;height:44px;color:var(--text3);margin-bottom:14px;transition:all .4s}
+.drop:hover svg{color:var(--violet2);transform:translateY(-4px)}
+.drop .t{font:600 15px/1.4 var(--sans);color:var(--text);margin-bottom:6px}
+.drop .s{font:400 13px/1.4 var(--sans);color:var(--text3)}
+.drop .s b{color:var(--violet2);font-weight:600}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
 
-/* ===== File info ===== */
-.file-info{display:none;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:var(--radius);
-  padding:14px 18px;margin-top:16px;align-items:center;gap:14px;backdrop-filter:blur(10px);animation:fadeUp .3s ease-out}
-.file-info.show{display:flex}
-.fi-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
-  font-size:10px;font-weight:800;letter-spacing:0.03em;text-transform:uppercase;flex-shrink:0;position:relative}
-.fi-icon::after{content:'';position:absolute;inset:-2px;border-radius:14px;opacity:0.3;filter:blur(8px);z-index:-1}
-.fi-icon.pdf{background:linear-gradient(135deg,#f43f5e22,#f43f5e11);color:#fb7185;border:1px solid #f43f5e33}
-.fi-icon.pdf::after{background:#f43f5e}
-.fi-icon.doc{background:linear-gradient(135deg,#0ea5e922,#0ea5e911);color:#38bdf8;border:1px solid #0ea5e933}
-.fi-icon.doc::after{background:#0ea5e9}
-.fi-icon.ppt{background:linear-gradient(135deg,#f59e0b22,#f59e0b11);color:#fbbf24;border:1px solid #f59e0b33}
-.fi-icon.ppt::after{background:#f59e0b}
-.fi-icon.xls{background:linear-gradient(135deg,#10b98122,#10b98111);color:#34d399;border:1px solid #10b98133}
-.fi-icon.xls::after{background:#10b981}
-.fi-icon.img{background:linear-gradient(135deg,#a78bfa22,#a78bfa11);color:#c4b5fd;border:1px solid #a78bfa33}
-.fi-icon.img::after{background:#a78bfa}
-.fi-icon.txt{background:rgba(255,255,255,0.04);color:var(--text2);border:1px solid var(--border)}
-.fi-icon.web{background:linear-gradient(135deg,#0ea5e922,#0ea5e911);color:#38bdf8;border:1px solid #0ea5e933}
+/* File info */
+.fi{display:none;background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:var(--r);
+  padding:14px 18px;margin-top:16px;align-items:center;gap:14px;backdrop-filter:blur(12px);animation:fadeUp .3s ease-out}
+.fi.show{display:flex}
+.fi-ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  font:800 10px/1 var(--sans);letter-spacing:.03em;text-transform:uppercase;flex-shrink:0;position:relative}
+.fi-ico::after{content:'';position:absolute;inset:-3px;border-radius:15px;opacity:.25;filter:blur(10px);z-index:-1}
+.fi-ico.pdf{background:linear-gradient(135deg,rgba(244,63,94,.18),rgba(244,63,94,.06));color:#fb7185;border:1px solid rgba(244,63,94,.25)}
+.fi-ico.pdf::after{background:var(--rose)}
+.fi-ico.doc{background:linear-gradient(135deg,rgba(14,165,233,.18),rgba(14,165,233,.06));color:#38bdf8;border:1px solid rgba(14,165,233,.25)}
+.fi-ico.doc::after{background:var(--sky)}
+.fi-ico.ppt{background:linear-gradient(135deg,rgba(245,158,11,.18),rgba(245,158,11,.06));color:#fbbf24;border:1px solid rgba(245,158,11,.25)}
+.fi-ico.ppt::after{background:var(--amber)}
+.fi-ico.xls{background:linear-gradient(135deg,rgba(16,185,129,.18),rgba(16,185,129,.06));color:#34d399;border:1px solid rgba(16,185,129,.25)}
+.fi-ico.xls::after{background:var(--emerald)}
+.fi-ico.img{background:linear-gradient(135deg,rgba(167,139,250,.18),rgba(167,139,250,.06));color:#c4b5fd;border:1px solid rgba(167,139,250,.25)}
+.fi-ico.img::after{background:var(--violet2)}
+.fi-ico.txt{background:rgba(255,255,255,.04);color:var(--text2);border:1px solid var(--border)}
+.fi-ico.web{background:linear-gradient(135deg,rgba(14,165,233,.18),rgba(14,165,233,.06));color:#38bdf8;border:1px solid rgba(14,165,233,.25)}
 .fi-name{font-weight:600;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fi-size{font-size:12px;color:var(--text3);margin-top:2px}
-.fi-details{flex:1;min-width:0}
-.fi-remove{background:none;border:none;cursor:pointer;color:var(--text3);padding:6px;border-radius:8px;transition:all .2s}
-.fi-remove:hover{background:rgba(244,63,94,0.1);color:var(--rose)}
+.fi-meta{font-size:12px;color:var(--text3);margin-top:2px}
+.fi-det{flex:1;min-width:0}
+.fi-x{background:0 0;border:none;cursor:pointer;color:var(--text3);padding:6px;border-radius:8px;transition:all .2s}
+.fi-x:hover{background:rgba(244,63,94,.1);color:var(--rose)}
 
-/* ===== Format grid ===== */
-.fmt-section{margin-top:24px;display:none}
-.fmt-section.show{display:block}
-.fmt-section label{display:block;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:12px}
-.fmt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
-.fmt-btn{padding:14px 10px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,0.02);
+/* Format grid */
+.fs{margin-top:24px;display:none}.fs.show{display:block}
+.fs label{display:block;font:700 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:12px}
+.fg{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
+.fb{padding:14px 10px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.015);
   cursor:pointer;text-align:center;transition:all .3s cubic-bezier(.4,0,.2,1);position:relative;overflow:hidden}
-.fmt-btn::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(139,92,246,0.1),transparent);
-  opacity:0;transition:opacity .3s}
-.fmt-btn:hover{border-color:rgba(139,92,246,0.4);background:rgba(139,92,246,0.06);transform:translateY(-2px);
-  box-shadow:0 4px 20px rgba(139,92,246,0.1)}
-.fmt-btn:hover::before{opacity:1}
-.fmt-btn.selected{border-color:var(--accent);background:linear-gradient(135deg,rgba(139,92,246,0.2),rgba(167,139,250,0.1));
-  color:white;box-shadow:0 0 30px rgba(139,92,246,0.15),inset 0 1px 0 rgba(255,255,255,0.1)}
-.fmt-btn .ext{font-weight:700;font-size:14px;display:block;letter-spacing:0.01em}
-.fmt-btn .name{font-size:10px;opacity:.5;margin-top:3px}
+.fb::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(139,92,246,.1),transparent);opacity:0;transition:opacity .3s}
+.fb:hover{border-color:rgba(139,92,246,.35);background:rgba(139,92,246,.05);transform:translateY(-2px);box-shadow:0 4px 20px rgba(139,92,246,.1)}
+.fb:hover::before{opacity:1}
+.fb.on{border-color:var(--violet);background:linear-gradient(135deg,rgba(139,92,246,.18),rgba(167,139,250,.08));color:#fff;
+  box-shadow:0 0 30px rgba(139,92,246,.12),inset 0 1px 0 rgba(255,255,255,.08)}
+.fb .e{font-weight:700;font-size:14px;display:block}
+.fb .n{font-size:10px;opacity:.45;margin-top:3px}
 
-/* ===== Button ===== */
-.convert-btn{width:100%;padding:16px;margin-top:24px;border:none;border-radius:14px;
-  background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:white;font-family:var(--font-sans);font-size:15px;
-  font-weight:600;cursor:pointer;transition:all .3s cubic-bezier(.4,0,.2,1);display:none;letter-spacing:0.02em;
-  position:relative;overflow:hidden}
-.convert-btn::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent);transition:left .5s}
-.convert-btn.show{display:block}
-.convert-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 30px rgba(139,92,246,0.3)}
-.convert-btn:hover:not(:disabled)::before{left:100%}
-.convert-btn:active:not(:disabled){transform:translateY(0)}
-.convert-btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+/* Button */
+.go{width:100%;padding:16px;margin-top:24px;border:none;border-radius:14px;
+  background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;font:600 15px/1 var(--sans);
+  cursor:pointer;transition:all .3s cubic-bezier(.4,0,.2,1);display:none;letter-spacing:.02em;position:relative;overflow:hidden}
+.go::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);transition:left .5s}
+.go.show{display:block}
+.go:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 30px rgba(139,92,246,.3)}
+.go:hover:not(:disabled)::before{left:100%}
+.go:active:not(:disabled){transform:translateY(0)}
+.go:disabled{opacity:.3;cursor:not-allowed}
 
-/* ===== Progress ===== */
-.progress{margin-top:20px;display:none}
-.progress.show{display:block}
-.bar-track{background:rgba(255,255,255,0.06);border-radius:8px;height:5px;overflow:hidden}
-.bar{height:100%;background:linear-gradient(90deg,#8b5cf6,#ec4899,#f59e0b);border-radius:8px;width:0;transition:width .5s;
-  box-shadow:0 0 12px rgba(139,92,246,0.4)}
-.bar.indeterminate{width:100%;background:linear-gradient(90deg,#8b5cf6,#ec4899,#f59e0b,#8b5cf6);
-  background-size:300% 100%;animation:rainbow 2s linear infinite}
-@keyframes rainbow{0%{background-position:0% 0}100%{background-position:300% 0}}
-.progress-label{font-size:12px;color:var(--text3);margin-top:10px;text-align:center}
+/* Progress */
+.prog{margin-top:20px;display:none}.prog.show{display:block}
+.bar-bg{background:rgba(255,255,255,.05);border-radius:8px;height:5px;overflow:hidden}
+.bar{height:100%;border-radius:8px;width:0;transition:width .5s}
+.bar.ok{background:linear-gradient(90deg,var(--violet),var(--rose),var(--amber));background-size:300% 100%;animation:rb 2s linear infinite}
+.bar.done{width:100%;background:linear-gradient(90deg,var(--emerald),#059669);box-shadow:0 0 16px rgba(16,185,129,.3)}
+.bar.err{width:100%;background:linear-gradient(90deg,var(--rose),#e11d48);box-shadow:0 0 16px rgba(244,63,94,.3)}
+@keyframes rb{0%{background-position:0}100%{background-position:300%}}
+.prog-t{font-size:12px;color:var(--text3);margin-top:10px;text-align:center}
+.prog-detail{font-size:11px;color:var(--text3);margin-top:4px;text-align:center;font-family:var(--mono);opacity:.7}
 
-/* ===== Result ===== */
-.result{margin-top:20px;display:none;text-align:center}
-.result.show{display:block}
-.r-success{background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.15);border-radius:var(--radius);
-  padding:32px;backdrop-filter:blur(10px)}
-.r-success .r-icon{width:52px;height:52px;border-radius:50%;background:rgba(16,185,129,0.15);
-  display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px;
-  box-shadow:0 0 30px rgba(16,185,129,0.15);animation:pop .4s cubic-bezier(.175,.885,.32,1.275)}
+/* Result */
+.res{margin-top:20px;display:none;text-align:center}.res.show{display:block}
+.res-ok{background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.12);border-radius:var(--r);padding:32px;backdrop-filter:blur(12px)}
+.res-ok .ri{width:54px;height:54px;border-radius:50%;background:rgba(16,185,129,.12);display:inline-flex;align-items:center;
+  justify-content:center;margin-bottom:14px;box-shadow:0 0 30px rgba(16,185,129,.12);animation:pop .4s cubic-bezier(.175,.885,.32,1.275)}
 @keyframes pop{0%{transform:scale(0)}100%{transform:scale(1)}}
-.r-success .r-title{font-weight:700;color:#34d399;font-size:17px}
-.r-success .r-sub{font-size:13px;color:var(--text2);margin-top:4px}
-.dl-btn{display:inline-block;margin-top:18px;padding:12px 36px;background:linear-gradient(135deg,#10b981,#059669);
-  color:white;border-radius:12px;text-decoration:none;font-weight:600;font-size:14px;transition:all .3s;
-  cursor:pointer;border:none;font-family:var(--font-sans);box-shadow:0 4px 20px rgba(16,185,129,0.2)}
-.dl-btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(16,185,129,0.3)}
-.r-error{background:rgba(244,63,94,0.08);border:1px solid rgba(244,63,94,0.15);border-radius:var(--radius);
-  padding:24px;color:#fb7185;font-size:14px}
-.reset-btn{margin-top:16px;padding:10px 28px;border:1px solid var(--border);border-radius:12px;
-  background:rgba(255,255,255,0.03);color:var(--text2);font-size:13px;cursor:pointer;transition:all .3s;
-  font-family:var(--font-sans);backdrop-filter:blur(10px)}
-.reset-btn:hover{border-color:var(--accent);color:var(--accent2);background:rgba(139,92,246,0.06)}
+.res-ok .rt{font-weight:700;color:#34d399;font-size:17px}
+.res-ok .rs{font-size:13px;color:var(--text2);margin-top:5px}
+.dl{display:inline-block;margin-top:18px;padding:12px 36px;background:linear-gradient(135deg,#10b981,#059669);
+  color:#fff;border-radius:12px;text-decoration:none;font-weight:600;font-size:14px;transition:all .3s;
+  cursor:pointer;border:none;font-family:var(--sans);box-shadow:0 4px 20px rgba(16,185,129,.2)}
+.dl:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(16,185,129,.3)}
+.res-err{background:rgba(244,63,94,.07);border:1px solid rgba(244,63,94,.12);border-radius:var(--r);padding:24px;color:#fb7185;font-size:14px}
+.rst{margin-top:16px;padding:10px 28px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.025);
+  color:var(--text2);font-size:13px;cursor:pointer;transition:all .3s;font-family:var(--sans)}
+.rst:hover{border-color:var(--violet);color:var(--violet2);background:var(--violet-bg)}
 
-/* ===== Merge list ===== */
-.merge-item{display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(255,255,255,0.03);
-  border:1px solid var(--border);border-radius:12px;margin-bottom:6px;transition:all .2s;backdrop-filter:blur(10px)}
-.merge-item:hover{border-color:var(--border2);background:rgba(255,255,255,0.05)}
-.merge-idx{font-size:10px;font-weight:800;color:var(--accent2);width:24px;height:24px;
-  display:flex;align-items:center;justify-content:center;background:rgba(139,92,246,0.1);border-radius:6px;flex-shrink:0}
-.merge-name{flex:1;font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.merge-size{font-size:11px;color:var(--text3);flex-shrink:0}
-.merge-rm{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:6px;
-  border-radius:8px;transition:all .2s;flex-shrink:0}
-.merge-rm:hover{background:rgba(244,63,94,0.1);color:var(--rose)}
+/* Merge */
+.mi{display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(255,255,255,.025);border:1px solid var(--border);
+  border-radius:12px;margin-bottom:6px;transition:all .2s;backdrop-filter:blur(12px)}
+.mi:hover{border-color:var(--border2);background:rgba(255,255,255,.04)}
+.mi-i{font:800 10px/1 var(--sans);color:var(--violet2);width:26px;height:26px;display:flex;align-items:center;
+  justify-content:center;background:var(--violet-bg);border-radius:7px;flex-shrink:0}
+.mi-n{flex:1;font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mi-s{font-size:11px;color:var(--text3);flex-shrink:0}
+.mi-x{background:0 0;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:6px;border-radius:8px;transition:all .2s;flex-shrink:0}
+.mi-x:hover{background:rgba(244,63,94,.1);color:var(--rose)}
+.ig{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.it{position:relative;width:76px;height:76px;border-radius:12px;overflow:hidden;border:1px solid var(--border);transition:all .2s}
+.it:hover{border-color:var(--violet);transform:scale(1.05);box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.it img{width:100%;height:100%;object-fit:cover}
+.it button{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);border:none;color:#fff;
+  width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:10px;line-height:20px;text-align:center;backdrop-filter:blur(8px)}
+.it button:hover{background:var(--rose)}
 
-/* ===== Img preview ===== */
-.img-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
-.img-thumb{position:relative;width:76px;height:76px;border-radius:12px;overflow:hidden;
-  border:1px solid var(--border);transition:all .2s}
-.img-thumb:hover{border-color:var(--accent);transform:scale(1.05);box-shadow:0 4px 16px rgba(0,0,0,0.3)}
-.img-thumb img{width:100%;height:100%;object-fit:cover}
-.img-thumb button{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);border:none;color:white;
-  width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:10px;line-height:20px;text-align:center;
-  backdrop-filter:blur(8px);transition:all .2s}
-.img-thumb button:hover{background:var(--rose)}
-
-/* ===== Tags ===== */
+/* Tags */
 .tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:28px;justify-content:center}
-.tag{padding:6px 14px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:999px;
-  font-size:11px;color:var(--text2);font-weight:500;letter-spacing:0.02em;transition:all .3s;cursor:default}
-.tag:hover{border-color:rgba(139,92,246,0.3);background:rgba(139,92,246,0.06);color:var(--accent2)}
+.tag{padding:6px 14px;background:rgba(255,255,255,.035);border:1px solid var(--border);border-radius:999px;
+  font-size:11px;color:var(--text2);font-weight:500;letter-spacing:.02em;transition:all .3s;cursor:default}
+.tag:hover{border-color:rgba(139,92,246,.3);background:var(--violet-bg);color:var(--violet2)}
 
-/* ===== Footer ===== */
-.footer{text-align:center;margin-top:48px;padding-top:28px;border-top:1px solid var(--border)}
-.footer p{font-size:12px;color:var(--text3);line-height:1.8}
-.footer a{color:var(--accent2);text-decoration:none;font-weight:600;transition:color .2s}
-.footer a:hover{color:var(--rose)}
+/* Footer */
+.foot{text-align:center;margin-top:48px;padding-top:28px;border-top:1px solid var(--border)}
+.foot p{font-size:12px;color:var(--text3);line-height:1.8}
+.foot a{color:var(--violet2);text-decoration:none;font-weight:600;transition:color .2s}
+.foot a:hover{color:var(--rose)}
 
-/* ===== Animations ===== */
-@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-.animate-in{animation:fadeUp .6s cubic-bezier(.4,0,.2,1) both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+.anim{animation:fadeUp .6s cubic-bezier(.4,0,.2,1) both}
 
-/* ===== Responsive ===== */
 @media(max-width:520px){
-  .page{padding:36px 16px 60px}
-  .hero h1{font-size:36px}
-  .card-body{padding:20px}
-  .fmt-grid{grid-template-columns:repeat(3,1fr)}
-  .dropzone{padding:36px 16px}
-  .tab{font-size:12px;padding:10px 4px}
-  .stats{gap:20px}
-  .orb{opacity:0.08}
+  .page{padding:32px 14px 60px}.hero h1{font-size:34px}.body{padding:20px}
+  .fg{grid-template-columns:repeat(3,1fr)}.drop{padding:36px 16px}
+  .tab{font-size:12px;padding:10px 4px}.stats{gap:20px}.orb{opacity:.06}
 }
 </style>
 </head>
 <body>
-
-<!-- Floating orbs -->
-<div class="orbs">
-  <div class="orb"></div>
-  <div class="orb"></div>
-  <div class="orb"></div>
-</div>
+<div class="bg"><div class="orb a"></div><div class="orb b"></div><div class="orb c"></div></div>
 
 <div class="page">
-  <div class="hero animate-in">
-    <div class="hero-badge">Browser-native · No Upload</div>
+  <div class="hero anim">
+    <div class="badge">Browser-native · No Upload</div>
     <h1>linjiade<span class="thin">'s</span> 转换器</h1>
-    <p>文件在你的浏览器本地完成转换，不会上传到任何服务器。</p>
+    <p>所有转换均在浏览器本地完成，文件不会离开你的电脑。</p>
     <div class="stats">
-      <div class="stat"><div class="stat-num">30+</div><div class="stat-label">Conversions</div></div>
-      <div class="stat"><div class="stat-num">0</div><div class="stat-label">Uploads</div></div>
-      <div class="stat"><div class="stat-num">100%</div><div class="stat-label">Local</div></div>
+      <div><div class="stat-num">30+</div><div class="stat-lbl">格式转换</div></div>
+      <div><div class="stat-num">0 KB</div><div class="stat-lbl">文件上传</div></div>
+      <div><div class="stat-num">100%</div><div class="stat-lbl">本地处理</div></div>
     </div>
   </div>
 
-  <div class="card animate-in" style="animation-delay:.1s">
+  <div class="card anim" style="animation-delay:.1s">
     <div class="tabs" id="tabs">
-      <button class="tab active" data-tab="convert">格式转换</button>
-      <button class="tab" data-tab="merge">PDF 合并</button>
-      <button class="tab" data-tab="img-merge">图片合并 PDF</button>
+      <button class="tab active" data-t="cv">格式转换</button>
+      <button class="tab" data-t="mg">PDF 合并</button>
+      <button class="tab" data-t="im">图片合并 PDF</button>
     </div>
+    <div class="body">
 
-    <div class="card-body">
-      <!-- ===== 格式转换 ===== -->
-      <div id="panel-convert">
-        <div class="dropzone" id="dropzone">
+      <!-- 格式转换 -->
+      <div id="p-cv">
+        <div class="drop" id="drop">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <div class="dz-title">拖拽文件到此处，或点击选择</div>
-          <div class="dz-sub">PDF &middot; Word &middot; PPT &middot; Excel &middot; 图片 &middot; Markdown &middot; HTML &middot; CSV</div>
-          <input type="file" id="fileInput">
+          <div class="t">拖拽文件到此处，或点击选择</div>
+          <div class="s">PDF · Word · PPT · Excel · 图片 · Markdown · HTML · CSV</div>
+          <input type="file" id="fi">
         </div>
-
-        <div class="file-info" id="fileInfo">
-          <div class="fi-icon" id="fIcon"></div>
-          <div class="fi-details">
-            <div class="fi-name" id="fName"></div>
-            <div class="fi-size" id="fSize"></div>
-          </div>
-          <button class="fi-remove" id="removeBtn" title="移除">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+        <div class="fi" id="fi2">
+          <div class="fi-ico" id="fiIco"></div>
+          <div class="fi-det"><div class="fi-name" id="fiName"></div><div class="fi-meta" id="fiMeta"></div></div>
+          <button class="fi-x" id="fiX"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
-
-        <div class="fmt-section" id="fmtSection">
-          <label>转换为</label>
-          <div class="fmt-grid" id="fmtGrid"></div>
-        </div>
-
-        <button class="convert-btn" id="convertBtn">开始转换</button>
-
-        <div class="progress" id="progress">
-          <div class="bar-track"><div class="bar indeterminate" id="bar"></div></div>
-          <div class="progress-label" id="progressText">正在转换...</div>
-        </div>
-
-        <div class="result" id="result"></div>
+        <div class="fs" id="fs"><label>转换为</label><div class="fg" id="fg"></div></div>
+        <button class="go" id="go">开始转换</button>
+        <div class="prog" id="prog"><div class="bar-bg"><div class="bar ok" id="bar"></div></div><div class="prog-t" id="progT"></div><div class="prog-detail" id="progD"></div></div>
+        <div class="res" id="res"></div>
       </div>
 
-      <!-- ===== PDF 合并 ===== -->
-      <div id="panel-merge" style="display:none">
-        <div class="dropzone" id="dropMerge">
+      <!-- PDF 合并 -->
+      <div id="p-mg" style="display:none">
+        <div class="drop" id="dropM">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M8 3v18"/><path d="M16 3v18"/></svg>
-          <div class="dz-title">选择多个 PDF 文件</div>
-          <div class="dz-sub">按选择顺序合并为一个文件</div>
-          <input type="file" id="mergeInput" accept=".pdf" multiple>
+          <div class="t">选择多个 PDF 文件</div>
+          <div class="s">按选择顺序合并为一个文件</div>
+          <input type="file" id="fiM" accept=".pdf" multiple>
         </div>
-        <div id="mergeList" style="margin-top:14px"></div>
-        <button class="convert-btn" id="mergeBtn" style="display:none">合并 PDF</button>
-        <div class="progress" id="mergeProgress"><div class="bar-track"><div class="bar indeterminate"></div></div><div class="progress-label">正在合并...</div></div>
-        <div class="result" id="mergeResult"></div>
+        <div id="ml" style="margin-top:14px"></div>
+        <button class="go" id="goM" style="display:none">合并 PDF</button>
+        <div class="prog" id="progM"><div class="bar-bg"><div class="bar ok"></div></div><div class="prog-t">正在合并...</div></div>
+        <div class="res" id="resM"></div>
       </div>
 
-      <!-- ===== 图片合并 PDF ===== -->
-      <div id="panel-img-merge" style="display:none">
-        <div class="dropzone" id="dropImg">
+      <!-- 图片合并 -->
+      <div id="p-im" style="display:none">
+        <div class="drop" id="dropI">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-          <div class="dz-title">选择多张图片，合并为 PDF</div>
-          <div class="dz-sub">支持 PNG / JPG / WebP / BMP / GIF</div>
-          <input type="file" id="imgInput" accept="image/*" multiple>
+          <div class="t">选择多张图片，合并为 PDF</div>
+          <div class="s">PNG / JPG / WebP / BMP / GIF</div>
+          <input type="file" id="fiI" accept="image/*" multiple>
         </div>
-        <div class="img-grid" id="imgList"></div>
-        <button class="convert-btn" id="imgMergeBtn" style="display:none">生成 PDF</button>
-        <div class="progress" id="imgProgress"><div class="bar-track"><div class="bar indeterminate"></div></div><div class="progress-label">正在生成...</div></div>
-        <div class="result" id="imgResult"></div>
+        <div class="ig" id="il"></div>
+        <button class="go" id="goI" style="display:none">生成 PDF</button>
+        <div class="prog" id="progI"><div class="bar-bg"><div class="bar ok"></div></div><div class="prog-t">正在生成...</div></div>
+        <div class="res" id="resI"></div>
       </div>
+
     </div>
   </div>
 
-  <!-- Tags -->
-  <div class="tags animate-in" style="animation-delay:.2s">
-    <span class="tag">PDF to Word</span>
-    <span class="tag">Word to PDF</span>
-    <span class="tag">Word to HTML</span>
-    <span class="tag">PDF to Text</span>
-    <span class="tag">Markdown to PDF</span>
-    <span class="tag">HTML to PDF</span>
-    <span class="tag">Image Convert</span>
-    <span class="tag">Image to PDF</span>
-    <span class="tag">Excel to CSV</span>
-    <span class="tag">PDF Merge</span>
-    <span class="tag">Image Merge PDF</span>
+  <div class="tags anim" style="animation-delay:.2s">
+    <span class="tag">PDF → Word</span><span class="tag">Word → PDF</span><span class="tag">Word → HTML</span>
+    <span class="tag">PDF → Text</span><span class="tag">Markdown → PDF</span><span class="tag">HTML → PDF</span>
+    <span class="tag">图片互转</span><span class="tag">图片 → PDF</span><span class="tag">Excel ↔ CSV</span>
+    <span class="tag">PDF 合并</span><span class="tag">PPT → PDF</span><span class="tag">MD → Word</span>
   </div>
-
-  <div class="footer animate-in" style="animation-delay:.3s">
+  <div class="foot anim" style="animation-delay:.3s">
     <p>All conversions happen locally in your browser.<br>Files never leave your machine.</p>
     <p style="margin-top:8px">Built by <a href="#">linjiade</a></p>
   </div>
 </div>
 
 <script>
-// ====== Utils ======
 const $=id=>document.getElementById(id);
 const ext=n=>n.split('.').pop().toLowerCase();
-const fmtSize=b=>b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';
+const sz=b=>b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';
+const ICO={pdf:'pdf',doc:'doc',docx:'doc',ppt:'ppt',pptx:'ppt',xls:'xls',xlsx:'xls',csv:'xls',txt:'txt',html:'web',htm:'web',md:'txt',png:'img',jpg:'img',jpeg:'img',gif:'img',bmp:'img',webp:'img',svg:'img',tiff:'img'};
+const LBL={pdf:'PDF',docx:'DOCX',doc:'DOC',pptx:'PPTX',ppt:'PPT',xlsx:'XLSX',xls:'XLS',csv:'CSV',txt:'TXT',html:'HTML',htm:'HTM',md:'MD',png:'PNG',jpg:'JPG',jpeg:'JPG',gif:'GIF',bmp:'BMP',webp:'WEBP',svg:'SVG',tiff:'TIFF'};
 
-const EXT_CLASS={pdf:'pdf',doc:'doc',docx:'doc',ppt:'ppt',pptx:'ppt',xls:'xls',xlsx:'xls',csv:'xls',txt:'txt',html:'web',htm:'web',md:'txt',png:'img',jpg:'img',jpeg:'img',gif:'img',bmp:'img',webp:'img',svg:'img',tiff:'img'};
-const EXT_LABEL={pdf:'PDF',docx:'DOCX',doc:'DOC',pptx:'PPTX',ppt:'PPT',xlsx:'XLSX',xls:'XLS',csv:'CSV',txt:'TXT',html:'HTML',htm:'HTM',md:'MD',png:'PNG',jpg:'JPG',jpeg:'JPG',gif:'GIF',bmp:'BMP',webp:'WEBP',svg:'SVG',tiff:'TIFF'};
-
-// Conversion routes
-const ROUTES={
-  pdf:[{f:'docx',n:'Word'},{f:'txt',n:'TXT'},{f:'html',n:'HTML'}],
-  docx:[{f:'pdf',n:'PDF'},{f:'html',n:'HTML'},{f:'txt',n:'TXT'}],
-  doc:[{f:'pdf',n:'PDF'},{f:'html',n:'HTML'},{f:'txt',n:'TXT'}],
-  pptx:[{f:'pdf',n:'PDF'},{f:'png',n:'PNG'}],
-  xlsx:[{f:'csv',n:'CSV'},{f:'html',n:'HTML'}],
+const R={
+  pdf:[{f:'docx',n:'Word 文档'},{f:'txt',n:'纯文本'},{f:'html',n:'HTML 网页'}],
+  docx:[{f:'pdf',n:'PDF'},{f:'html',n:'HTML 网页'},{f:'txt',n:'纯文本'}],
+  doc:[{f:'pdf',n:'PDF'},{f:'html',n:'HTML 网页'},{f:'txt',n:'纯文本'}],
+  pptx:[{f:'pdf',n:'PDF'},{f:'png',n:'PNG 图片'}],
+  xlsx:[{f:'csv',n:'CSV'},{f:'html',n:'HTML 网页'}],
   xls:[{f:'csv',n:'CSV'},{f:'xlsx',n:'XLSX'}],
-  csv:[{f:'xlsx',n:'Excel'},{f:'txt',n:'TXT'},{f:'html',n:'HTML'}],
-  txt:[{f:'pdf',n:'PDF'},{f:'docx',n:'Word'}],
-  md:[{f:'html',n:'HTML'},{f:'pdf',n:'PDF'},{f:'docx',n:'Word'}],
-  html:[{f:'pdf',n:'PDF'},{f:'txt',n:'TXT'},{f:'md',n:'Markdown'},{f:'docx',n:'Word'}],
-  htm:[{f:'pdf',n:'PDF'},{f:'txt',n:'TXT'}],
+  csv:[{f:'xlsx',n:'Excel'},{f:'txt',n:'纯文本'},{f:'html',n:'HTML 网页'}],
+  txt:[{f:'pdf',n:'PDF'},{f:'docx',n:'Word 文档'}],
+  md:[{f:'html',n:'HTML 网页'},{f:'pdf',n:'PDF'},{f:'docx',n:'Word 文档'}],
+  html:[{f:'pdf',n:'PDF'},{f:'txt',n:'纯文本'},{f:'md',n:'Markdown'},{f:'docx',n:'Word 文档'}],
+  htm:[{f:'pdf',n:'PDF'},{f:'txt',n:'纯文本'}],
   png:[{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'bmp',n:'BMP'},{f:'ico',n:'ICO'},{f:'pdf',n:'PDF'}],
   jpg:[{f:'png',n:'PNG'},{f:'webp',n:'WebP'},{f:'bmp',n:'BMP'},{f:'ico',n:'ICO'},{f:'pdf',n:'PDF'}],
   jpeg:[{f:'png',n:'PNG'},{f:'webp',n:'WebP'},{f:'bmp',n:'BMP'},{f:'ico',n:'ICO'},{f:'pdf',n:'PDF'}],
@@ -396,513 +325,302 @@ const ROUTES={
   svg:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'pdf',n:'PDF'}],
 };
 
-// ====== Tabs ======
-document.querySelectorAll('.tab').forEach(tab=>{
-  tab.addEventListener('click',()=>{
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-    tab.classList.add('active');
-    ['convert','merge','img-merge'].forEach(id=>{
-      $('panel-'+id).style.display=id===tab.dataset.tab?'block':'none';
-    });
-  });
+// Tabs
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    ['cv','mg','im'].forEach(id=>$('p-'+id).style.display=id===t.dataset.t?'block':'none');
+  }
 });
 
 // ====== Format Conversion ======
-let selFile=null,selTarget=null;
+let sf=null,st=null;
+function rst(){sf=null;st=null;$('fi2').classList.remove('show');$('fs').classList.remove('show');$('go').classList.remove('show');$('prog').classList.remove('show');$('res').classList.remove('show');$('res').innerHTML='';$('fg').innerHTML='';$('fi').value='';$('bar').className='bar ok';$('progD').textContent=''}
+function hook(el,ev,fn){el.addEventListener(ev,fn)}
+hook($('drop'),'dragover',e=>{e.preventDefault();$('drop').classList.add('over')});
+hook($('drop'),'dragleave',()=>$('drop').classList.remove('over'));
+hook($('drop'),'drop',e=>{e.preventDefault();$('drop').classList.remove('over');if(e.dataTransfer.files.length)handle(e.dataTransfer.files[0])});
+hook($('fi'),'change',()=>{if($('fi').files.length)handle($('fi').files[0])});
+hook($('fiX'),'click',rst);
 
-function resetConvert(){
-  selFile=null;selTarget=null;
-  $('fileInfo').classList.remove('show');$('fmtSection').classList.remove('show');
-  $('convertBtn').classList.remove('show');$('progress').classList.remove('show');
-  $('result').classList.remove('show');$('result').innerHTML='';$('fmtGrid').innerHTML='';
-  $('fileInput').value='';
-  $('bar').style.background='';
-}
-
-['dragenter','dragover'].forEach(e=>$('dropzone').addEventListener(e,ev=>{ev.preventDefault();$('dropzone').classList.add('dragover')}));
-['dragleave','drop'].forEach(e=>$('dropzone').addEventListener(e,ev=>{ev.preventDefault();$('dropzone').classList.remove('dragover')}));
-$('dropzone').addEventListener('drop',ev=>{if(ev.dataTransfer.files.length)handleFile(ev.dataTransfer.files[0])});
-$('fileInput').addEventListener('change',()=>{if($('fileInput').files.length)handleFile($('fileInput').files[0])});
-$('removeBtn').addEventListener('click',resetConvert);
-
-function handleFile(file){
-  selFile=file;selTarget=null;
-  const e=ext(file.name);
-  const icon=$('fIcon');
-  icon.className='fi-icon '+(EXT_CLASS[e]||'txt');
-  icon.textContent=EXT_LABEL[e]||e.toUpperCase();
-  $('fName').textContent=file.name;
-  $('fSize').textContent=fmtSize(file.size);
-  $('fileInfo').classList.add('show');
-
-  const routes=ROUTES[e];
-  $('fmtGrid').innerHTML='';
+function handle(f){
+  sf=f;st=null;const e=ext(f.name);
+  const ic=$('fiIco');ic.className='fi-ico '+(ICO[e]||'txt');ic.textContent=LBL[e]||e.toUpperCase();
+  $('fiName').textContent=f.name;$('fiMeta').textContent=sz(f.size);
+  $('fi2').classList.add('show');
+  const routes=R[e];$('fg').innerHTML='';
   if(routes&&routes.length){
     routes.forEach(r=>{
-      const btn=document.createElement('div');
-      btn.className='fmt-btn';
-      btn.innerHTML=`<span class="ext">.${r.f}</span><span class="name">${r.n}</span>`;
-      btn.onclick=()=>{selTarget=r.f;$('fmtGrid').querySelectorAll('.fmt-btn').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected');$('convertBtn').classList.add('show')};
-      $('fmtGrid').appendChild(btn);
+      const b=document.createElement('div');b.className='fb';
+      b.innerHTML=`<span class="e">.${r.f}</span><span class="n">${r.n}</span>`;
+      b.onclick=()=>{st=r.f;$('fg').querySelectorAll('.fb').forEach(x=>x.classList.remove('on'));b.classList.add('on');$('go').classList.add('show')};
+      $('fg').appendChild(b);
     });
-    $('fmtSection').classList.add('show');
-    $('convertBtn').classList.remove('show');
-  }else{
-    $('fmtGrid').innerHTML='<p style="color:var(--text3);font-size:13px">No conversion available for this format</p>';
-    $('fmtSection').classList.add('show');
-  }
+    $('fs').classList.add('show');$('go').classList.remove('show');
+  }else{$('fg').innerHTML='<p style="color:var(--text3);font-size:13px">暂不支持此格式的转换</p>';$('fs').classList.add('show')}
 }
 
-$('convertBtn').addEventListener('click',async()=>{
-  if(!selFile||!selTarget)return;
-  $('convertBtn').disabled=true;
-  $('progress').classList.add('show');
-  $('bar').className='bar indeterminate';
-  $('bar').style.background='';
-  $('progressText').textContent='正在转换...';
-  $('result').classList.remove('show');
-
+hook($('go'),'click',async()=>{
+  if(!sf||!st)return;
+  $('go').disabled=true;$('prog').classList.add('show');$('bar').className='bar ok';$('bar').style.width='';
+  $('progT').textContent='正在转换...';$('progD').textContent='';$('res').classList.remove('show');
   try{
-    const e=ext(selFile.name);
-    const key=e+'->'+selTarget;
-    let blob,outName=selFile.name.replace(/\.[^.]+$/,'')+'.'+selTarget;
+    const e=ext(sf.name),k=e+'->'+st;
+    let blob,out=sf.name.replace(/\.[^.]+$/,'')+'.'+st;
 
-    // PDF conversions
-    if(key==='pdf->txt') blob=await pdfToText(selFile);
-    else if(key==='pdf->docx') blob=await pdfToWord(selFile);
-    else if(key==='pdf->html') blob=await pdfToHtml(selFile);
-    // Word conversions
-    else if(key==='docx->pdf'||key==='doc->pdf') blob=await wordToPdf(selFile);
-    else if(key==='docx->html'||key==='doc->html') blob=await wordToHtml(selFile);
-    else if(key==='docx->txt'||key==='doc->txt') blob=await wordToText(selFile);
-    // PPT conversions
-    else if(key==='pptx->pdf') blob=await pptToPdf(selFile);
-    else if(key==='pptx->png') blob=await pptToPng(selFile);
-    // Markdown
-    else if(key==='md->html') blob=await mdToHtml(selFile);
-    else if(key==='md->pdf') blob=await mdToPdf(selFile);
-    else if(key==='md->docx') blob=await mdToWord(selFile);
-    // HTML
-    else if(key==='html->pdf'||key==='htm->pdf') blob=await htmlToPdf(selFile);
-    else if(key==='html->txt'||key==='htm->txt') blob=await htmlToTxt(selFile);
-    else if(key==='html->md') blob=await htmlToMd(selFile);
-    else if(key==='html->docx') blob=await htmlToWord(selFile);
-    // Text
-    else if(key==='txt->pdf') blob=await txtToPdf(selFile);
-    else if(key==='txt->docx') blob=await txtToDocx(selFile);
-    // Images
-    else if(e==='svg'&&selTarget==='pdf') blob=await svgToPdf(selFile);
-    else if(e==='svg') blob=await svgConvert(selFile,selTarget);
-    else if(selTarget==='pdf') blob=await imgToPdf(selFile);
-    else if(['png','jpg','jpeg','webp','bmp','gif','ico'].includes(selTarget)) blob=await imgConvert(selFile,selTarget);
-    // Excel/CSV
-    else if(key==='xlsx->csv'||key==='xls->csv') blob=await excelToCsv(selFile);
-    else if(key==='xlsx->html') blob=await excelToHtml(selFile);
-    else if(key==='xls->xlsx') blob=await excelConvert(selFile,'xlsx');
-    else if(key==='csv->xlsx') blob=await csvToExcel(selFile);
-    else if(key==='csv->txt') blob=await csvToTxt(selFile);
-    else if(key==='csv->html') blob=await csvToHtml(selFile);
-    else throw new Error('Conversion not supported: '+key);
+    $('progD').textContent='正在解析文件...';
 
-    $('bar').className='bar';$('bar').style.width='100%';
-    $('progressText').textContent='转换完成';
-    showResult(blob,outName,$('result'));
+    // === PDF ===
+    if(k==='pdf->txt'){blob=await pdf2txt(sf)}
+    else if(k==='pdf->docx'){blob=await pdf2docx(sf)}
+    else if(k==='pdf->html'){blob=await pdf2html(sf)}
+    // === Word ===
+    else if(k==='docx->pdf'||k==='doc->pdf'){blob=await word2pdf(sf)}
+    else if(k==='docx->html'||k==='doc->html'){blob=await word2html(sf)}
+    else if(k==='docx->txt'||k==='doc->txt'){blob=await word2txt(sf)}
+    // === PPT ===
+    else if(k==='pptx->pdf'){blob=await ppt2pdf(sf)}
+    else if(k==='pptx->png'){blob=await ppt2png(sf)}
+    // === MD ===
+    else if(k==='md->html')blob=await md2html(sf);
+    else if(k==='md->pdf')blob=await md2pdf(sf);
+    else if(k==='md->docx')blob=await md2docx(sf);
+    // === HTML ===
+    else if(k==='html->pdf'||k==='htm->pdf')blob=await html2pdf_(sf);
+    else if(k==='html->txt'||k==='htm->txt')blob=await html2txt(sf);
+    else if(k==='html->md')blob=await html2md(sf);
+    else if(k==='html->docx')blob=await html2docx(sf);
+    // === TXT ===
+    else if(k==='txt->pdf')blob=await txt2pdf(sf);
+    else if(k==='txt->docx')blob=await txt2docx(sf);
+    // === Images ===
+    else if(e==='svg'&&st==='pdf')blob=await svg2pdf(sf);
+    else if(e==='svg')blob=await svg2img(sf,st);
+    else if(st==='pdf')blob=await img2pdf(sf);
+    else if(['png','jpg','jpeg','webp','bmp','gif','ico'].includes(st))blob=await img2img(sf,st);
+    // === Excel/CSV ===
+    else if(k==='xlsx->csv'||k==='xls->csv')blob=await xls2csv(sf);
+    else if(k==='xlsx->html')blob=await xls2html(sf);
+    else if(k==='xls->xlsx')blob=await xls2xls(sf,'xlsx');
+    else if(k==='csv->xlsx')blob=await csv2xls(sf);
+    else if(k==='csv->txt')blob=await csv2txt(sf);
+    else if(k==='csv->html')blob=await csv2html(sf);
+    else throw new Error('不支持此转换: '+k);
+
+    $('bar').className='bar done';$('progT').textContent='转换完成';
+    show(blob,out,$('res'));
   }catch(err){
-    $('bar').className='bar';$('bar').style.background='linear-gradient(90deg,#f43f5e,#e11d48)';
-    $('result').innerHTML=`<div class="r-error">转换失败: ${err.message}</div><button class="reset-btn" onclick="resetConvert()">重试</button>`;
-    $('result').classList.add('show');
-  }finally{$('convertBtn').disabled=false}
+    $('bar').className='bar err';$('progT').textContent='转换失败';
+    $('progD').textContent=err.message;
+    $('res').innerHTML=`<div class="res-err">转换失败：${err.message}</div><button class="rst" onclick="rst()">重试</button>`;
+    $('res').classList.add('show');
+    console.error(err);
+  }finally{$('go').disabled=false}
 });
 
-function showResult(blob,name,container){
-  const url=URL.createObjectURL(blob);
-  container.innerHTML=`
-    <div class="r-success">
-      <div class="r-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--pastel-green-t)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      </div>
-      <div class="r-title">转换完成</div>
-      <div class="r-sub">${name} (${fmtSize(blob.size)})</div>
-      <a class="dl-btn" href="${url}" download="${name}">下载文件</a>
-    </div>
-    <button class="reset-btn" onclick="resetConvert()">转换其他文件</button>`;
-  container.classList.add('show');
-  const a=document.createElement('a');a.href=url;a.download=name;a.click();
+function show(blob,name,c){
+  const u=URL.createObjectURL(blob);
+  c.innerHTML=`<div class="res-ok"><div class="ri"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><div class="rt">转换完成</div><div class="rs">${name} (${sz(blob.size)})</div><a class="dl" href="${u}" download="${name}">下载文件</a></div><button class="rst" onclick="rst()">转换其他文件</button>`;
+  c.classList.add('show');
+  const a=document.createElement('a');a.href=u;a.download=name;a.click();
 }
 
-// ====== PDF via pdfjsLib (loaded as module fallback) ======
-let pdfjsLib=null;
-async function getPdfJs(){
-  if(pdfjsLib)return pdfjsLib;
-  try{
-    pdfjsLib=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.mjs');
-    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
-    return pdfjsLib;
-  }catch(e){
-    // fallback: load via script tag
-    return new Promise((resolve,reject)=>{
-      const s=document.createElement('script');
-      s.src='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js';
-      s.onload=()=>{pdfjsLib=window['pdfjs-dist/build/pdf'];pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js';resolve(pdfjsLib)};
-      s.onerror=reject;
-      document.head.appendChild(s);
-    });
-  }
-}
-
-async function readPdfPages(file){
-  const pdfj=await getPdfJs();
-  const buf=await file.arrayBuffer();
-  const doc=await pdfj.getDocument({data:buf}).promise;
+// ====== PDF Engine (pdf.js v3) ======
+async function pdfPages(f){
+  $('progD').textContent='正在读取 PDF 页面...';
+  const buf=await f.arrayBuffer();
+  const doc=await pdfjsLib.getDocument({data:buf}).promise;
   const pages=[];
   for(let i=1;i<=doc.numPages;i++){
-    const page=await doc.getPage(i);
-    const tc=await page.getTextContent();
-    pages.push(tc.items.map(item=>item.str).join(' '));
+    $('progD').textContent=`正在读取第 ${i}/${doc.numPages} 页...`;
+    const pg=await doc.getPage(i);
+    const tc=await pg.getTextContent();
+    // 保留位置信息用于更好的布局
+    const items=tc.items;
+    if(!items.length){pages.push({text:'',items:[]});continue}
+    // 按 Y 坐标分组行
+    const lines=[];let curLine=[];let lastY=null;
+    items.forEach(item=>{
+      const y=Math.round(item.transform[5]);
+      if(lastY!==null&&Math.abs(y-lastY)>3){
+        lines.push(curLine.sort((a,b)=>a.x-b.x).map(i=>i.str).join(''));
+        curLine=[];
+      }
+      curLine.push({str:item.str,x:item.transform[4],y});
+      lastY=y;
+    });
+    if(curLine.length)lines.push(curLine.sort((a,b)=>a.x-b.x).map(i=>i.str).join(''));
+    pages.push({text:lines.join('\n'),items});
   }
   return pages;
 }
 
-// PDF -> Text
-async function pdfToText(file){
-  const pages=await readPdfPages(file);
-  return new Blob([pages.join('\n\n')],{type:'text/plain;charset=utf-8'});
+async function pdf2txt(f){
+  const pages=await pdfPages(f);
+  return new Blob([pages.map(p=>p.text).join('\n\n')],{type:'text/plain;charset=utf-8'});
 }
 
-// PDF -> Word
-async function pdfToWord(file){
-  const pages=await readPdfPages(file);
-  const {Document,Packer,Paragraph,TextRun,HeadingLevel}=docx;
+async function pdf2docx(f){
+  $('progD').textContent='正在提取 PDF 文本...';
+  const pages=await pdfPages(f);
+  $('progD').textContent='正在生成 Word 文档...';
+  const{Document,Packer,Paragraph,TextRun,HeadingLevel,AlignmentType,BorderStyle}=docx;
   const children=[];
-  pages.forEach((text,i)=>{
-    if(i>0) children.push(new Paragraph({children:[new TextRun({text:'',break:2})]}));
-    if(pages.length>1) children.push(new Paragraph({text:`Page ${i+1}`,heading:HeadingLevel.HEADING_2,spacing:{after:120}}));
-    const lines=text.split(/\n+/);
+
+  pages.forEach((pg,pi)=>{
+    if(pages.length>1&&pg.text.trim()){
+      children.push(new Paragraph({
+        text:`— 第 ${pi+1} 页 —`,
+        heading:HeadingLevel.HEADING_2,
+        alignment:AlignmentType.CENTER,
+        spacing:{before:pi>0?400:200,after:200},
+      }));
+    }
+    const lines=pg.text.split('\n');
     lines.forEach(line=>{
       const t=line.trim();
-      if(t) children.push(new Paragraph({children:[new TextRun({text:t,size:22})],spacing:{after:80}}));
+      if(!t)return;
+      // 检测标题（全大写、短行、或以数字开头的章节）
+      const isHeading=t.length<60&&(t===t.toUpperCase()||/^\d+[\.\、]/.test(t)||/^第[一二三四五六七八九十\d]+[章节课]/.test(t));
+      if(isHeading){
+        children.push(new Paragraph({
+          text:t,heading:HeadingLevel.HEADING_3,
+          spacing:{before:160,after:80}
+        }));
+      }else{
+        children.push(new Paragraph({
+          children:[new TextRun({text:t,size:24,font:'Microsoft YaHei'})],
+          spacing:{after:80,line:360}
+        }));
+      }
     });
   });
-  if(!children.length) children.push(new Paragraph({children:[new TextRun({text:'(empty)',size:22})]}));
-  const doc=new Document({sections:[{children}]});
+
+  if(!children.length)children.push(new Paragraph({children:[new TextRun({text:'（PDF 无可提取文本）',size:24})]}));
+  const doc=new Document({
+    sections:[{
+      properties:{page:{margin:{top:1440,right:1440,bottom:1440,left:1440}}},
+      children
+    }]
+  });
   return Packer.toBlob(doc);
 }
 
-// PDF -> HTML
-async function pdfToHtml(file){
-  const pages=await readPdfPages(file);
+async function pdf2html(f){
+  const pages=await pdfPages(f);
   const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const body=pages.map((t,i)=>`<section style="margin:24px auto;max-width:800px;padding:32px;background:white;border:1px solid #eee;border-radius:8px;"><pre style="white-space:pre-wrap;font-family:Georgia,serif;line-height:1.8;font-size:15px;">${esc(t)}</pre><div style="text-align:center;color:#bbb;font-size:12px;margin-top:16px">Page ${i+1}</div></section>`).join('\n');
-  return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{background:#f8f8f7;margin:0;padding:20px}</style></head><body>${body}</body></html>`],{type:'text/html;charset=utf-8'});
+  const body=pages.map((pg,i)=>`<section style="margin:24px auto;max-width:800px;padding:36px 40px;background:#fff;border:1px solid #e5e5e5;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.04)"><pre style="white-space:pre-wrap;font-family:Georgia,'Noto Serif SC',serif;line-height:1.9;font-size:15px;color:#1a1a1a">${esc(pg.text)}</pre>${pages.length>1?`<div style="text-align:center;color:#bbb;font-size:12px;margin-top:20px;padding-top:16px;border-top:1px solid #f0f0f0">第 ${i+1} 页</div>`:''}</section>`).join('\n');
+  return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${f.name}</title><style>*{margin:0;box-sizing:border-box}body{background:#f7f7f5;padding:24px 16px;font-family:system-ui,sans-serif}</style></head><body>${body}</body></html>`],{type:'text/html;charset=utf-8'});
 }
 
-// Word -> HTML (via mammoth)
-async function wordToHtml(file){
-  const buf=await file.arrayBuffer();
-  const result=await mammoth.convertToHtml({arrayBuffer:buf});
-  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.8;color:#1a1a1a}
-h1,h2,h3{font-family:'Playfair Display',Georgia,serif;letter-spacing:-0.02em}
-table{border-collapse:collapse;width:100%;margin:20px 0}th,td{border:1px solid #eaeaea;padding:10px 14px;text-align:left}
-th{background:#f8f8f7;font-weight:600}code{background:#f4f4f2;padding:2px 6px;border-radius:4px;font-size:.9em}
-img{max-width:100%}</style></head><body>${result.value}</body></html>`;
+// ====== Word Engine (mammoth) ======
+async function word2html(f){
+  const buf=await f.arrayBuffer();
+  const r=await mammoth.convertToHtml({arrayBuffer:buf});
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${f.name}</title><style>body{font-family:'Plus Jakarta Sans','Microsoft YaHei',system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.9;color:#1a1a1a}h1,h2,h3{font-family:'Playfair Display',Georgia,serif;letter-spacing:-.02em;margin:1.5em 0 .5em}h1{font-size:28px}h2{font-size:22px}h3{font-size:18px}table{border-collapse:collapse;width:100%;margin:20px 0}th,td{border:1px solid #e0e0e0;padding:10px 14px;text-align:left}th{background:#f8f8f7;font-weight:600}code{background:#f4f4f2;padding:2px 6px;border-radius:4px;font-size:.9em}pre{background:#f8f8f7;padding:16px;border-radius:8px;overflow-x:auto}img{max-width:100%;height:auto}p{margin:.5em 0}</style></head><body>${r.value}</body></html>`;
   return new Blob([html],{type:'text/html;charset=utf-8'});
 }
 
-// Word -> Text (via mammoth)
-async function wordToText(file){
-  const buf=await file.arrayBuffer();
-  const result=await mammoth.extractRawText({arrayBuffer:buf});
-  return new Blob([result.value],{type:'text/plain;charset=utf-8'});
+async function word2txt(f){
+  const buf=await f.arrayBuffer();
+  const r=await mammoth.extractRawText({arrayBuffer:buf});
+  return new Blob([r.value],{type:'text/plain;charset=utf-8'});
 }
 
-// Word -> PDF (via mammoth -> HTML -> PDF)
-async function wordToPdf(file){
-  const buf=await file.arrayBuffer();
-  const result=await mammoth.convertToHtml({arrayBuffer:buf});
+async function word2pdf(f){
+  const buf=await f.arrayBuffer();
+  $('progD').textContent='正在解析 Word 文档...';
+  const r=await mammoth.convertToHtml({arrayBuffer:buf});
+  $('progD').textContent='正在渲染 PDF...';
   const div=document.createElement('div');
-  div.innerHTML=result.value;
-  div.style.cssText='font-family:"Plus Jakarta Sans",system-ui,sans-serif;padding:24px;line-height:1.8;color:#1a1a1a;max-width:800px';
+  div.innerHTML=r.value;
+  div.style.cssText='font-family:"Plus Jakarta Sans","Microsoft YaHei",system-ui,sans-serif;padding:28px;line-height:1.9;color:#1a1a1a;max-width:800px;font-size:15px';
   document.body.appendChild(div);
   try{
-    return await html2pdf().set({margin:[12,12,12,12],filename:'output.pdf',html2canvas:{scale:2},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}}).from(div).outputPdf('blob');
+    return await html2pdf().set({margin:[14,14,14,14],filename:'output.pdf',html2canvas:{scale:2,useCORS:true,letterRendering:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}}).from(div).outputPdf('blob');
   }finally{document.body.removeChild(div)}
 }
 
-// PPT -> PDF (basic text extraction)
-async function pptToPdf(file){
-  const buf=await file.arrayBuffer();
+// ====== PPT Engine (JSZip) ======
+async function pptSlides(f){
+  const buf=await f.arrayBuffer();
   const zip=await JSZip.loadAsync(buf);
-  // Try to extract slide XMLs
+  const files=Object.keys(zip.files).filter(x=>/^ppt\/slides\/slide\d+\.xml$/.test(x)).sort();
   const slides=[];
-  const files=Object.keys(zip.files).filter(f=>f.match(/ppt\/slides\/slide\d+\.xml/)).sort();
-  for(const f of files){
-    const xml=await zip.files[f].async('string');
-    const texts=[...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map(m=>m[1]).filter(t=>t.trim());
-    slides.push(texts.join(' '));
-  }
-  if(!slides.length) throw new Error('Cannot read PPT content');
-  const {jsPDF}=window.jspdf;
-  const doc=new jsPDF({unit:'mm',format:'a4'});
-  slides.forEach((text,i)=>{
-    if(i>0) doc.addPage();
-    doc.setFontSize(10);
-    const lines=doc.splitTextToSize(text,180);
-    doc.text(`Slide ${i+1}`,15,15);
-    doc.setFontSize(11);
-    let y=25;
-    lines.forEach(line=>{if(y>277){doc.addPage();y=20}doc.text(line,15,y);y+=6});
-  });
-  return doc.output('blob');
-}
-
-// PPT -> PNG (simplified)
-async function pptToPng(file){
-  const buf=await file.arrayBuffer();
-  const zip=await JSZip.loadAsync(buf);
-  const slides=[];
-  const files=Object.keys(zip.files).filter(f=>f.match(/ppt\/slides\/slide\d+\.xml/)).sort();
-  for(const f of files){
-    const xml=await zip.files[f].async('string');
+  for(const fn of files){
+    const xml=await zip.files[fn].async('string');
     const texts=[...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map(m=>m[1]).filter(t=>t.trim());
     slides.push(texts);
   }
-  if(!slides.length) throw new Error('Cannot read PPT content');
-  const canvas=document.createElement('canvas');
-  canvas.width=1920;canvas.height=1080;
-  const ctx=canvas.getContext('2d');
-  const texts=slides[0]||[];
-  ctx.fillStyle='white';ctx.fillRect(0,0,1920,1080);
-  ctx.fillStyle='#1a1a1a';ctx.font='28px "Microsoft YaHei",sans-serif';
-  let y=100;
-  texts.forEach(t=>{if(y<1000){ctx.fillText(t,100,y);y+=42}});
-  return new Promise(r=>canvas.toBlob(r,'image/png'));
+  return slides;
 }
-
-// ====== Conversion implementations ======
-function readText(f){return f.text()}
-function readAB(f){return f.arrayBuffer()}
-
-async function mdToHtml(file){
-  const md=await readText(file);
-  return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.8;color:#1a1a1a}
-h1,h2,h3{font-family:'Playfair Display',Georgia,serif;letter-spacing:-0.02em;border-bottom:1px solid #eaeaea;padding-bottom:6px}
-code{background:#f4f4f2;padding:2px 6px;border-radius:4px;font-size:.9em}
-pre{background:#f8f8f7;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #eaeaea}
-pre code{background:none;padding:0}table{border-collapse:collapse;width:100%}
-th,td{border:1px solid #eaeaea;padding:10px 14px}th{background:#f8f8f7}
-blockquote{border-left:3px solid #d4d4d4;margin:0;padding:10px 20px;color:#6b6b6b}
-a{color:#1a1a1a}img{max-width:100%}</style></head><body>${marked.parse(md)}</body></html>`],{type:'text/html;charset=utf-8'});
-}
-
-async function mdToPdf(file){
-  const md=await readText(file);
-  const div=document.createElement('div');
-  div.innerHTML=marked.parse(md);
-  div.style.cssText='font-family:"Plus Jakarta Sans",system-ui,sans-serif;padding:20px;line-height:1.8;color:#1a1a1a;max-width:800px';
-  document.body.appendChild(div);
-  try{return await html2pdf().set({margin:[10,10,10,10],filename:'output.pdf',html2canvas:{scale:2},jsPDF:{unit:'mm',format:'a4'}}).from(div).outputPdf('blob')}
-  finally{document.body.removeChild(div)}
-}
-
-async function mdToWord(file){
-  const md=await readText(file);
-  const div=document.createElement('div');
-  div.innerHTML=marked.parse(md);
-  const {Document,Packer,Paragraph,TextRun,HeadingLevel}=docx;
-  const children=[];
-  div.querySelectorAll('h1,h2,h3,h4,p,li,pre,blockquote').forEach(el=>{
-    const text=el.textContent.trim();
-    if(!text)return;
-    let heading;
-    if(el.tagName==='H1')heading=HeadingLevel.HEADING_1;
-    else if(el.tagName==='H2')heading=HeadingLevel.HEADING_2;
-    else if(el.tagName==='H3')heading=HeadingLevel.HEADING_3;
-    if(heading)children.push(new Paragraph({text,heading,spacing:{after:120}}));
-    else if(el.tagName==='PRE')children.push(new Paragraph({children:[new TextRun({text,font:'Consolas',size:20})],spacing:{after:80}}));
-    else children.push(new Paragraph({children:[new TextRun({text,size:22})],spacing:{after:80}}));
+async function ppt2pdf(f){
+  const slides=await pptSlides(f);
+  if(!slides.length)throw new Error('无法读取 PPT 内容');
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
+  slides.forEach((texts,i)=>{
+    if(i>0)doc.addPage();
+    doc.setFontSize(9);doc.setTextColor(150);doc.text(`Slide ${i+1}`,105,12,{align:'center'});
+    doc.setFontSize(14);doc.setTextColor(30);
+    let y=30;
+    texts.forEach(t=>{const ls=doc.splitTextToSize(t,170);ls.forEach(l=>{if(y>275){doc.addPage();y=20}doc.text(l,20,y);y+=8});y+=4});
   });
-  if(!children.length)children.push(new Paragraph({text:md}));
-  const doc=new Document({sections:[{children}]});
-  return Packer.toBlob(doc);
-}
-
-async function htmlToPdf(file){
-  const html=await readText(file);
-  const iframe=document.createElement('iframe');
-  iframe.style.cssText='position:fixed;left:-9999px;width:800px;height:600px';
-  document.body.appendChild(iframe);
-  iframe.srcdoc=html;
-  await new Promise(r=>iframe.onload=r);
-  await new Promise(r=>setTimeout(r,500));
-  try{return await html2pdf().set({margin:[10,10,10,10],filename:'output.pdf',html2canvas:{scale:2},jsPDF:{unit:'mm',format:'a4'}}).from(iframe.contentDocument.body).outputPdf('blob')}
-  finally{document.body.removeChild(iframe)}
-}
-
-async function htmlToTxt(file){
-  const html=await readText(file);
-  const div=document.createElement('div');div.innerHTML=html;
-  return new Blob([div.textContent||''],{type:'text/plain;charset=utf-8'});
-}
-
-async function htmlToMd(file){
-  const html=await readText(file);
-  const div=document.createElement('div');div.innerHTML=html;
-  let md='';
-  function walk(n){
-    if(n.nodeType===3){md+=n.textContent;return}
-    if(n.nodeType!==1)return;
-    const t=n.tagName.toLowerCase();
-    if(t==='h1')md+='# ';else if(t==='h2')md+='## ';else if(t==='h3')md+='### ';
-    else if(t==='strong'||t==='b')md+='**';else if(t==='em'||t==='i')md+='*';
-    else if(t==='li')md+='- ';else if(t==='br'){md+='\n';return}
-    else if(t==='p'||t==='div')md+='\n';
-    n.childNodes.forEach(walk);
-    if(['h1','h2','h3','h4','p','div','li','blockquote'].includes(t))md+='\n';
-    if(t==='strong'||t==='b')md+='**';if(t==='em'||t==='i')md+='*';
-  }
-  walk(div);
-  return new Blob([md.replace(/\n{3,}/g,'\n\n').trim()],{type:'text/markdown;charset=utf-8'});
-}
-
-async function htmlToWord(file){
-  const html=await readText(file);
-  const div=document.createElement('div');div.innerHTML=html;
-  const {Document,Packer,Paragraph,TextRun,HeadingLevel}=docx;
-  const children=[];
-  div.querySelectorAll('h1,h2,h3,h4,p,li,td,th').forEach(el=>{
-    const text=el.textContent.trim();if(!text)return;
-    let heading;
-    if(el.tagName==='H1')heading=HeadingLevel.HEADING_1;
-    else if(el.tagName==='H2')heading=HeadingLevel.HEADING_2;
-    else if(el.tagName==='H3')heading=HeadingLevel.HEADING_3;
-    if(heading)children.push(new Paragraph({text,heading}));
-    else children.push(new Paragraph({children:[new TextRun({text,size:22})]}));
-  });
-  if(!children.length)children.push(new Paragraph({text:div.textContent||''}));
-  const doc=new Document({sections:[{children}]});
-  return Packer.toBlob(doc);
-}
-
-async function txtToPdf(file){
-  const text=await readText(file);
-  const {jsPDF}=window.jspdf;
-  const doc=new jsPDF({unit:'mm',format:'a4'});
-  const lines=doc.splitTextToSize(text,180);
-  doc.setFontSize(11);let y=20;
-  lines.forEach(l=>{if(y>277){doc.addPage();y=20}doc.text(l,15,y);y+=6});
   return doc.output('blob');
 }
-
-async function txtToDocx(file){
-  const text=await readText(file);
-  const {Document,Packer,Paragraph,TextRun}=docx;
-  const doc=new Document({sections:[{children:text.split('\n').map(l=>new Paragraph({children:[new TextRun({text:l,size:22})]}))}]});
-  return Packer.toBlob(doc);
+async function ppt2png(f){
+  const slides=await pptSlides(f);if(!slides.length)throw new Error('无法读取 PPT 内容');
+  const c=document.createElement('canvas');c.width=1920;c.height=1080;const ctx=c.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,1920,1080);
+  ctx.fillStyle='#1a1a1a';ctx.font='32px "Microsoft YaHei",sans-serif';
+  let y=120;(slides[0]||[]).forEach(t=>{if(y<1000){ctx.fillText(t,120,y);y+=48}});
+  return new Promise(r=>c.toBlob(r,'image/png'));
 }
 
-async function imgConvert(file,targetFmt){
-  const img=await loadImage(file);
-  const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;
-  const ctx=c.getContext('2d');
-  if(['jpg','jpeg','bmp'].includes(targetFmt)){ctx.fillStyle='#FFF';ctx.fillRect(0,0,c.width,c.height)}
-  ctx.drawImage(img,0,0);
-  const mime={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',bmp:'image/bmp',ico:'image/x-icon'};
-  return new Promise(r=>c.toBlob(r,mime[targetFmt]||'image/png',targetFmt==='webp'?0.92:0.95));
-}
+// ====== Other conversions ======
+const rd=f=>f.text();const rAB=f=>f.arrayBuffer();
 
-async function svgConvert(file,targetFmt){
-  const svg=await readText(file);
-  const b=new Blob([svg],{type:'image/svg+xml'});
-  const img=await loadImage(b);
-  const c=document.createElement('canvas');c.width=img.naturalWidth||800;c.height=img.naturalHeight||600;
-  c.getContext('2d').drawImage(img,0,0);
-  if(targetFmt==='pdf')return canvasToPdf(c);
-  return new Promise(r=>c.toBlob(r,{png:'image/png',jpg:'image/jpeg'}[targetFmt]||'image/png',0.95));
-}
-
-async function svgToPdf(file){return svgConvert(file,'pdf')}
-
-function loadImage(b){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(b)})}
-
-async function imgToPdf(file){
-  const img=await loadImage(file);
-  const {jsPDF}=window.jspdf;
-  const w=img.naturalWidth,h=img.naturalHeight;
-  const doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});
-  const c=document.createElement('canvas');c.width=w;c.height=h;
-  c.getContext('2d').drawImage(img,0,0);
-  doc.addImage(c.toDataURL('image/jpeg',0.95),'JPEG',0,0,w,h);
-  return doc.output('blob');
-}
-
-function canvasToPdf(c){
-  const {jsPDF}=window.jspdf;
-  const w=c.width,h=c.height;
-  const doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});
-  doc.addImage(c.toDataURL('image/jpeg',0.95),'JPEG',0,0,w,h);
-  return doc.output('blob');
-}
-
-async function excelToCsv(file){const d=await readAB(file);const wb=XLSX.read(d,{type:'array'});return new Blob(['﻿'+XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]])],{type:'text/csv;charset=utf-8'})}
-async function excelConvert(file,fmt){const d=await readAB(file);const wb=XLSX.read(d,{type:'array'});return new Blob([XLSX.write(wb,{bookType:fmt,type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
-async function excelToHtml(file){const d=await readAB(file);const wb=XLSX.read(d,{type:'array'});let h='<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #eaeaea;padding:8px}th{background:#f8f8f7}</style></head><body>';wb.SheetNames.forEach(n=>{h+=`<h3>${n}</h3>${XLSX.utils.sheet_to_html(wb.Sheets[n])}`});h+='</body></html>';return new Blob([h],{type:'text/html;charset=utf-8'})}
-async function csvToExcel(file){const t=await readText(file);const wb=XLSX.read(t,{type:'string'});return new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
-async function csvToTxt(file){return new Blob([await readText(file)],{type:'text/plain;charset=utf-8'})}
-async function csvToHtml(file){const t=await readText(file);const wb=XLSX.read(t,{type:'string'});return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #eaeaea;padding:8px}th{background:#f8f8f7}</style></head><body>${XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]])}</body></html>`],{type:'text/html;charset=utf-8'})}
+async function md2html(f){const md=await rd(f);return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${f.name}</title><style>body{font-family:'Plus Jakarta Sans','Microsoft YaHei',system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.9;color:#1a1a1a}h1,h2,h3{font-family:'Playfair Display',Georgia,serif;letter-spacing:-.02em;border-bottom:1px solid #eaeaea;padding-bottom:6px}code{background:#f4f4f2;padding:2px 6px;border-radius:4px;font-size:.9em}pre{background:#f8f8f7;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #eaeaea}pre code{background:0 0;padding:0}table{border-collapse:collapse;width:100%}th,td{border:1px solid #eaeaea;padding:10px 14px}th{background:#f8f8f7}blockquote{border-left:3px solid #d4d4d4;margin:0;padding:10px 20px;color:#6b6b6b}a{color:#6366f1}img{max-width:100%}</style></head><body>${marked.parse(md)}</body></html>`],{type:'text/html;charset=utf-8'})}
+async function md2pdf(f){const md=await rd(f);const d=document.createElement('div');d.innerHTML=marked.parse(md);d.style.cssText='font-family:"Plus Jakarta Sans","Microsoft YaHei",system-ui,sans-serif;padding:24px;line-height:1.9;color:#1a1a1a;max-width:800px';document.body.appendChild(d);try{return await html2pdf().set({margin:[12,12,12,12],html2canvas:{scale:2},jsPDF:{unit:'mm',format:'a4'}}).from(d).outputPdf('blob')}finally{document.body.removeChild(d)}}
+async function md2docx(f){const md=await rd(f);const d=document.createElement('div');d.innerHTML=marked.parse(md);const{Document,Packer,Paragraph,TextRun,HeadingLevel}=docx;const ch=[];d.querySelectorAll('h1,h2,h3,h4,p,li,pre,blockquote').forEach(el=>{const t=el.textContent.trim();if(!t)return;let h;if(el.tagName==='H1')h=HeadingLevel.HEADING_1;else if(el.tagName==='H2')h=HeadingLevel.HEADING_2;else if(el.tagName==='H3')h=HeadingLevel.HEADING_3;if(h)ch.push(new Paragraph({text:t,heading:h,spacing:{after:120}}));else if(el.tagName==='PRE')ch.push(new Paragraph({children:[new TextRun({text:t,font:'Consolas',size:20})],spacing:{after:80}}));else ch.push(new Paragraph({children:[new TextRun({text:t,size:22})],spacing:{after:80}}))});if(!ch.length)ch.push(new Paragraph({text:md}));return Packer.toBlob(new Document({sections:[{children:ch}]}))}
+async function html2pdf_(f){const h=await rd(f);const ifr=document.createElement('iframe');ifr.style.cssText='position:fixed;left:-9999px;width:800px;height:600px';document.body.appendChild(ifr);ifr.srcdoc=h;await new Promise(r=>ifr.onload=r);await new Promise(r=>setTimeout(r,600));try{return await html2pdf().set({margin:[10,10,10,10],html2canvas:{scale:2},jsPDF:{unit:'mm',format:'a4'}}).from(ifr.contentDocument.body).outputPdf('blob')}finally{document.body.removeChild(ifr)}}
+async function html2txt(f){const h=await rd(f);const d=document.createElement('div');d.innerHTML=h;return new Blob([d.textContent||''],{type:'text/plain;charset=utf-8'})}
+async function html2md(f){const h=await rd(f);const d=document.createElement('div');d.innerHTML=h;let m='';(function w(n){if(n.nodeType===3){m+=n.textContent;return}if(n.nodeType!==1)return;const t=n.tagName.toLowerCase();if(t==='h1')m+='# ';else if(t==='h2')m+='## ';else if(t==='h3')m+='### ';else if(t==='strong'||t==='b')m+='**';else if(t==='em'||t==='i')m+='*';else if(t==='li')m+='- ';else if(t==='br'){m+='\n';return}else if(t==='p'||t==='div')m+='\n';n.childNodes.forEach(w);if(['h1','h2','h3','h4','p','div','li','blockquote'].includes(t))m+='\n';if(t==='strong'||t==='b')m+='**';if(t==='em'||t==='i')m+='*'})(d);return new Blob([m.replace(/\n{3,}/g,'\n\n').trim()],{type:'text/markdown;charset=utf-8'})}
+async function html2docx(f){const h=await rd(f);const d=document.createElement('div');d.innerHTML=h;const{Document,Packer,Paragraph,TextRun,HeadingLevel}=docx;const ch=[];d.querySelectorAll('h1,h2,h3,h4,p,li,td,th').forEach(el=>{const t=el.textContent.trim();if(!t)return;let hd;if(el.tagName==='H1')hd=HeadingLevel.HEADING_1;else if(el.tagName==='H2')hd=HeadingLevel.HEADING_2;else if(el.tagName==='H3')hd=HeadingLevel.HEADING_3;if(hd)ch.push(new Paragraph({text:t,heading:hd}));else ch.push(new Paragraph({children:[new TextRun({text:t,size:22})]}))});if(!ch.length)ch.push(new Paragraph({text:d.textContent||''}));return Packer.toBlob(new Document({sections:[{children:ch}]}))}
+async function txt2pdf(f){const t=await rd(f);const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});const ls=doc.splitTextToSize(t,180);doc.setFontSize(11);let y=20;ls.forEach(l=>{if(y>277){doc.addPage();y=20}doc.text(l,15,y);y+=6});return doc.output('blob')}
+async function txt2docx(f){const t=await rd(f);const{Document,Packer,Paragraph,TextRun}=docx;return Packer.toBlob(new Document({sections:[{children:t.split('\n').map(l=>new Paragraph({children:[new TextRun({text:l,size:22})]}))}]}))}
+async function img2img(f,tf){const img=await loadImg(f);const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;const ctx=c.getContext('2d');if(['jpg','jpeg','bmp'].includes(tf)){ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height)}ctx.drawImage(img,0,0);const m={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',bmp:'image/bmp',ico:'image/x-icon'};return new Promise(r=>c.toBlob(r,m[tf]||'image/png',tf==='webp'?.92:.95))}
+async function svg2img(f,tf){const s=await rd(f);const b=new Blob([s],{type:'image/svg+xml'});const img=await loadImg(b);const c=document.createElement('canvas');c.width=img.naturalWidth||800;c.height=img.naturalHeight||600;c.getContext('2d').drawImage(img,0,0);if(tf==='pdf')return c2pdf(c);return new Promise(r=>c.toBlob(r,{png:'image/png',jpg:'image/jpeg'}[tf]||'image/png',.95))}
+async function svg2pdf(f){return svg2img(f,'pdf')}
+function loadImg(b){return new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=URL.createObjectURL(b)})}
+async function img2pdf(f){const img=await loadImg(f);const{jsPDF}=window.jspdf;const w=img.naturalWidth,h=img.naturalHeight;const doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h);return doc.output('blob')}
+function c2pdf(c){const{jsPDF}=window.jspdf;const w=c.width,h=c.height;const doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h);return doc.output('blob')}
+async function xls2csv(f){const d=await rAB(f);const wb=XLSX.read(d,{type:'array'});return new Blob(['﻿'+XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]])],{type:'text/csv;charset=utf-8'})}
+async function xls2xls(f,fmt){const d=await rAB(f);const wb=XLSX.read(d,{type:'array'});return new Blob([XLSX.write(wb,{bookType:fmt,type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
+async function xls2html(f){const d=await rAB(f);const wb=XLSX.read(d,{type:'array'});let h='<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #eaeaea;padding:8px 12px}th{background:#f8f8f7;font-weight:600}</style></head><body>';wb.SheetNames.forEach(n=>{h+=`<h3 style="margin:20px 0 10px">${n}</h3>${XLSX.utils.sheet_to_html(wb.Sheets[n])}`});h+='</body></html>';return new Blob([h],{type:'text/html;charset=utf-8'})}
+async function csv2xls(f){const t=await rd(f);const wb=XLSX.read(t,{type:'string'});return new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
+async function csv2txt(f){return new Blob([await rd(f)],{type:'text/plain;charset=utf-8'})}
+async function csv2html(f){const t=await rd(f);const wb=XLSX.read(t,{type:'string'});return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #eaeaea;padding:8px 12px}th{background:#f8f8f7}</style></head><body>${XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]])}</body></html>`],{type:'text/html;charset=utf-8'})}
 
 // ====== PDF Merge ======
-let mergeFiles=[];
-$('dropMerge').addEventListener('dragover',e=>{e.preventDefault();$('dropMerge').classList.add('dragover')});
-$('dropMerge').addEventListener('dragleave',()=>$('dropMerge').classList.remove('dragover'));
-$('dropMerge').addEventListener('drop',e=>{e.preventDefault();$('dropMerge').classList.remove('dragover');addMergeFiles(e.dataTransfer.files)});
-$('mergeInput').addEventListener('change',()=>addMergeFiles($('mergeInput').files));
+let mf=[];
+hook($('dropM'),'dragover',e=>{e.preventDefault();$('dropM').classList.add('over')});
+hook($('dropM'),'dragleave',()=>$('dropM').classList.remove('over'));
+hook($('dropM'),'drop',e=>{e.preventDefault();$('dropM').classList.remove('over');addM(e.dataTransfer.files)});
+hook($('fiM'),'change',()=>addM($('fiM').files));
+function addM(fs){Array.from(fs).forEach(f=>{if(ext(f.name)==='pdf')mf.push(f)});rM()}
+function rM(){$('ml').innerHTML=mf.map((f,i)=>`<div class="mi"><span class="mi-i">${i+1}</span><span class="mi-n">${f.name}</span><span class="mi-s">${sz(f.size)}</span><button class="mi-x" onclick="mf.splice(${i},1);rM()">移除</button></div>`).join('');$('goM').style.display=mf.length>=2?'block':'none'}
+hook($('goM'),'click',async()=>{if(mf.length<2)return;$('progM').classList.add('show');$('goM').disabled=true;try{const{PDFDocument}=PDFLib;const m=await PDFDocument.create();for(const f of mf){const s=await PDFDocument.load(await f.arrayBuffer());(await m.copyPages(s,s.getPageIndices())).forEach(p=>m.addPage(p))}show(new Blob([await m.save()],{type:'application/pdf'}),'合并结果.pdf',$('resM'))}catch(e){$('resM').innerHTML=`<div class="res-err">${e.message}</div>`;$('resM').classList.add('show')}finally{$('progM').classList.remove('show');$('goM').disabled=false}});
 
-function addMergeFiles(files){Array.from(files).forEach(f=>{if(ext(f.name)==='pdf')mergeFiles.push(f)});renderMergeList()}
-function renderMergeList(){
-  $('mergeList').innerHTML=mergeFiles.map((f,i)=>`<div class="merge-item"><span class="merge-idx">${i+1}</span><span class="merge-name">PDF - ${f.name}</span><span class="merge-size">${fmtSize(f.size)}</span><button class="merge-rm" onclick="mergeFiles.splice(${i},1);renderMergeList()">Remove</button></div>`).join('');
-  $('mergeBtn').style.display=mergeFiles.length>=2?'block':'none';
-}
-$('mergeBtn').addEventListener('click',async()=>{
-  if(mergeFiles.length<2)return;
-  $('mergeProgress').classList.add('show');$('mergeBtn').disabled=true;
-  try{
-    const{PDFDocument}=PDFLib;const merged=await PDFDocument.create();
-    for(const f of mergeFiles){const src=await PDFDocument.load(await f.arrayBuffer());const pages=await merged.copyPages(src,src.getPageIndices());pages.forEach(p=>merged.addPage(p))}
-    showResult(new Blob([await merged.save()],{type:'application/pdf'}),'merged.pdf',$('mergeResult'));
-  }catch(e){$('mergeResult').innerHTML=`<div class="r-error">${e.message}</div>`;$('mergeResult').classList.add('show')}
-  finally{$('mergeProgress').classList.remove('show');$('mergeBtn').disabled=false}
-});
-
-// ====== Image Merge PDF ======
-let imgFiles=[];
-$('dropImg').addEventListener('dragover',e=>{e.preventDefault();$('dropImg').classList.add('dragover')});
-$('dropImg').addEventListener('dragleave',()=>$('dropImg').classList.remove('dragover'));
-$('dropImg').addEventListener('drop',e=>{e.preventDefault();$('dropImg').classList.remove('dragover');addImgFiles(e.dataTransfer.files)});
-$('imgInput').addEventListener('change',()=>addImgFiles($('imgInput').files));
-
-function addImgFiles(files){Array.from(files).forEach(f=>{if(f.type.startsWith('image/'))imgFiles.push(f)});renderImgList()}
-function renderImgList(){
-  $('imgList').innerHTML=imgFiles.map((f,i)=>{const u=URL.createObjectURL(f);return`<div class="img-thumb"><img src="${u}"><button onclick="imgFiles.splice(${i},1);renderImgList()">x</button></div>`}).join('');
-  $('imgMergeBtn').style.display=imgFiles.length>=1?'block':'none';
-}
-$('imgMergeBtn').addEventListener('click',async()=>{
-  if(!imgFiles.length)return;
-  $('imgProgress').classList.add('show');$('imgMergeBtn').disabled=true;
-  try{
-    const{jsPDF}=window.jspdf;let doc=null;
-    for(const f of imgFiles){
-      const img=await loadImage(f);const w=img.naturalWidth,h=img.naturalHeight;
-      if(!doc)doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});
-      else doc.addPage([w,h],w>h?'landscape':'portrait');
-      const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);
-      doc.addImage(c.toDataURL('image/jpeg',0.95),'JPEG',0,0,w,h);
-    }
-    showResult(doc.output('blob'),'images.pdf',$('imgResult'));
-  }catch(e){$('imgResult').innerHTML=`<div class="r-error">${e.message}</div>`;$('imgResult').classList.add('show')}
-  finally{$('imgProgress').classList.remove('show');$('imgMergeBtn').disabled=false}
-});
+// ====== Image Merge ======
+let imf=[];
+hook($('dropI'),'dragover',e=>{e.preventDefault();$('dropI').classList.add('over')});
+hook($('dropI'),'dragleave',()=>$('dropI').classList.remove('over'));
+hook($('dropI'),'drop',e=>{e.preventDefault();$('dropI').classList.remove('over');addI(e.dataTransfer.files)});
+hook($('fiI'),'change',()=>addI($('fiI').files));
+function addI(fs){Array.from(fs).forEach(f=>{if(f.type.startsWith('image/'))imf.push(f)});rI()}
+function rI(){$('il').innerHTML=imf.map((f,i)=>{const u=URL.createObjectURL(f);return`<div class="it"><img src="${u}"><button onclick="imf.splice(${i},1);rI()">x</button></div>`}).join('');$('goI').style.display=imf.length?'block':'none'}
+hook($('goI'),'click',async()=>{if(!imf.length)return;$('progI').classList.add('show');$('goI').disabled=true;try{const{jsPDF}=window.jspdf;let doc=null;for(const f of imf){const img=await loadImg(f);const w=img.naturalWidth,h=img.naturalHeight;if(!doc)doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});else doc.addPage([w,h],w>h?'landscape':'portrait');const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h)}show(doc.output('blob'),'图片合并.pdf',$('resI'))}catch(e){$('resI').innerHTML=`<div class="res-err">${e.message}</div>`;$('resI').classList.add('show')}finally{$('progI').classList.remove('show');$('goI').disabled=false}});
 </script>
 </body>
 </html>
