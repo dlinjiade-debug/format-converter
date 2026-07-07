@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>万能格式转换器</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@9.1.1/build/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px;color:#e2e8f0}
+.top-bar{width:100%;max-width:720px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.top-bar h2{font-size:14px;color:#64748b;font-weight:400}
+.top-bar a{color:#60a5fa;font-size:13px;text-decoration:none}
+.top-bar a:hover{text-decoration:underline}
+.card{background:#1e293b;border:1px solid #334155;border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,0.4);width:100%;max-width:720px;overflow:hidden}
+.header{background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a78bfa 100%);padding:36px 32px;text-align:center;position:relative;overflow:hidden}
+.header::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(255,255,255,0.1) 0%,transparent 60%);pointer-events:none}
+.header h1{font-size:30px;font-weight:800;color:white;text-shadow:0 2px 10px rgba(0,0,0,0.2);position:relative}
+.header p{font-size:14px;color:rgba(255,255,255,0.85);margin-top:6px;position:relative}
+.body{padding:32px}
+/* Tabs */
+.tabs{display:flex;gap:4px;margin-bottom:24px;background:#0f172a;border-radius:12px;padding:4px}
+.tab{flex:1;padding:10px 8px;border:none;border-radius:10px;background:transparent;color:#94a3b8;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.tab.active{background:#6366f1;color:white;box-shadow:0 2px 10px rgba(99,102,241,0.3)}
+.tab:hover:not(.active){background:#1e293b;color:#e2e8f0}
+/* Drop */
+.dropzone{border:2px dashed #475569;border-radius:14px;padding:44px 24px;text-align:center;cursor:pointer;transition:all .3s;background:#0f172a;position:relative}
+.dropzone:hover,.dropzone.dragover{border-color:#818cf8;background:#1e1b4b}
+.dropzone .icon{font-size:52px;margin-bottom:10px;display:block}
+.dropzone .text{font-size:15px;color:#94a3b8}
+.dropzone .text strong{color:#a78bfa}
+.dropzone .hint{font-size:12px;color:#64748b;margin-top:6px}
+.dropzone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+/* File info */
+.file-info{display:none;background:#1a2332;border:1px solid #334155;border-radius:12px;padding:16px;margin-top:16px;align-items:center;gap:12px}
+.file-info.show{display:flex}
+.file-icon{font-size:34px;flex-shrink:0}
+.file-details{flex:1;min-width:0}
+.file-name{font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
+.file-size{font-size:12px;color:#64748b;margin-top:2px}
+.remove-btn{background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;padding:4px 8px;border-radius:6px;transition:all .2s}
+.remove-btn:hover{color:#f87171;background:#1e1b4b}
+/* Formats */
+.fmt-section{margin-top:22px;display:none}
+.fmt-section.show{display:block}
+.fmt-section label{display:block;font-weight:700;color:#cbd5e1;margin-bottom:10px;font-size:14px}
+.fmt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:8px}
+.fmt-btn{padding:10px 8px;border:2px solid #334155;border-radius:10px;background:#0f172a;cursor:pointer;text-align:center;transition:all .2s}
+.fmt-btn:hover{border-color:#818cf8;background:#1e1b4b}
+.fmt-btn.selected{border-color:#6366f1;background:#6366f1;color:white}
+.fmt-btn .ext{font-weight:800;font-size:14px;display:block}
+.fmt-btn .name{font-size:10px;opacity:.7;margin-top:2px}
+/* Convert */
+.convert-btn{width:100%;padding:15px;margin-top:24px;border:none;border-radius:12px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;font-size:16px;font-weight:700;cursor:pointer;transition:all .3s;display:none;letter-spacing:1px}
+.convert-btn.show{display:block}
+.convert-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(99,102,241,0.4)}
+.convert-btn:disabled{opacity:.5;cursor:not-allowed}
+/* Progress */
+.progress{margin-top:20px;display:none}
+.progress.show{display:block}
+.bar-bg{background:#0f172a;border-radius:8px;height:6px;overflow:hidden}
+.bar{height:100%;background:linear-gradient(90deg,#6366f1,#a78bfa);border-radius:8px;width:0;transition:width .4s}
+.bar.indeterminate{width:100%;background:repeating-linear-gradient(90deg,#6366f1 0%,#a78bfa 50%,#6366f1 100%);background-size:200% 100%;animation:slide 1.5s infinite}
+@keyframes slide{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.progress-text{font-size:12px;color:#64748b;margin-top:8px;text-align:center}
+/* Result */
+.result{margin-top:20px;display:none;text-align:center}
+.result.show{display:block}
+.success-box{background:#0f2a1a;border:1px solid #22c55e33;border-radius:12px;padding:24px}
+.success-box .s-icon{font-size:44px;margin-bottom:6px}
+.success-box .s-title{font-weight:700;color:#4ade80;font-size:16px}
+.success-box .s-sub{font-size:13px;color:#64748b;margin-top:4px}
+.dl-btn{display:inline-block;margin-top:14px;padding:10px 28px;background:#22c55e;color:white;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;transition:all .2s;cursor:pointer;border:none}
+.dl-btn:hover{background:#16a34a;transform:translateY(-1px)}
+.error-box{background:#2a0f0f;border:1px solid #ef444433;border-radius:12px;padding:20px;color:#fca5a5;font-size:14px}
+.reset-btn{margin-top:16px;padding:8px 24px;border:1px solid #475569;border-radius:10px;background:transparent;color:#94a3b8;font-size:13px;cursor:pointer;transition:all .2s}
+.reset-btn:hover{border-color:#818cf8;color:#a78bfa}
+/* Supported */
+.supported{margin-top:28px;padding-top:20px;border-top:1px solid #1e293b}
+.supported h3{font-size:12px;color:#475569;font-weight:500;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{padding:4px 10px;background:#0f172a;border:1px solid #334155;border-radius:6px;font-size:11px;color:#64748b;font-weight:600}
+/* Footer */
+.footer{text-align:center;margin-top:24px;font-size:12px;color:#475569}
+.footer a{color:#6366f1;text-decoration:none}
+@media(max-width:500px){.body{padding:20px}.header{padding:28px 20px}.header h1{font-size:24px}.fmt-grid{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h2>⚡ 纯浏览器端 · 文件不上传服务器</h2>
+</div>
+
+<div class="card">
+  <div class="header">
+    <h1>万能格式转换器</h1>
+    <p>文件在你的浏览器本地完成转换，不会上传到任何服务器</p>
+  </div>
+
+  <div class="body">
+    <div class="tabs">
+      <button class="tab active" data-tab="convert">格式转换</button>
+      <button class="tab" data-tab="merge">PDF 合并</button>
+      <button class="tab" data-tab="img-merge">图片合并 PDF</button>
+    </div>
+
+    <!-- ===== 格式转换 ===== -->
+    <div id="panel-convert">
+      <div class="dropzone" id="dropzone">
+        <span class="icon">📁</span>
+        <div class="text">拖拽文件到这里，或 <strong>点击选择</strong></div>
+        <div class="hint">支持图片 · Markdown · HTML · 文本 · Excel/CSV</div>
+        <input type="file" id="fileInput">
+      </div>
+
+      <div class="file-info" id="fileInfo">
+        <div class="file-icon" id="fIcon">📄</div>
+        <div class="file-details">
+          <div class="file-name" id="fName"></div>
+          <div class="file-size" id="fSize"></div>
+        </div>
+        <button class="remove-btn" id="removeBtn">✕</button>
+      </div>
+
+      <div class="fmt-section" id="fmtSection">
+        <label>转换为：</label>
+        <div class="fmt-grid" id="fmtGrid"></div>
+      </div>
+
+      <button class="convert-btn" id="convertBtn">✨ 开始转换</button>
+
+      <div class="progress" id="progress">
+        <div class="bar-bg"><div class="bar indeterminate" id="bar"></div></div>
+        <div class="progress-text" id="progressText">正在转换...</div>
+      </div>
+
+      <div class="result" id="result"></div>
+    </div>
+
+    <!-- ===== PDF 合并 ===== -->
+    <div id="panel-merge" style="display:none">
+      <div class="dropzone" id="dropMerge">
+        <span class="icon">📚</span>
+        <div class="text">选择多个 PDF 文件，合并为一个</div>
+        <div class="hint">按选择顺序合并</div>
+        <input type="file" id="mergeInput" accept=".pdf" multiple>
+      </div>
+      <div id="mergeList" style="margin-top:14px"></div>
+      <button class="convert-btn" id="mergeBtn" style="display:none">🔗 合并 PDF</button>
+      <div class="progress" id="mergeProgress"><div class="bar-bg"><div class="bar indeterminate"></div></div><div class="progress-text">正在合并...</div></div>
+      <div class="result" id="mergeResult"></div>
+    </div>
+
+    <!-- ===== 图片合并 PDF ===== -->
+    <div id="panel-img-merge" style="display:none">
+      <div class="dropzone" id="dropImg">
+        <span class="icon">🖼️</span>
+        <div class="text">选择多张图片，合并为 PDF</div>
+        <div class="hint">支持 PNG / JPG / WebP / BMP</div>
+        <input type="file" id="imgInput" accept="image/*" multiple>
+      </div>
+      <div id="imgList" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px"></div>
+      <button class="convert-btn" id="imgMergeBtn" style="display:none">📄 生成 PDF</button>
+      <div class="progress" id="imgProgress"><div class="bar-bg"><div class="bar indeterminate"></div></div><div class="progress-text">正在生成...</div></div>
+      <div class="result" id="imgResult"></div>
+    </div>
+
+    <!-- 支持的格式 -->
+    <div class="supported">
+      <h3>浏览器端支持</h3>
+      <div class="tags">
+        <span class="tag">MD → HTML/PDF</span>
+        <span class="tag">HTML → PDF</span>
+        <span class="tag">图片互转</span>
+        <span class="tag">图片 → PDF</span>
+        <span class="tag">文本 → PDF/DOCX</span>
+        <span class="tag">Excel ↔ CSV</span>
+        <span class="tag">图片合并PDF</span>
+        <span class="tag">PDF合并</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">所有转换均在浏览器本地完成 · 文件不会离开你的电脑</div>
+
+<script>
+// ====== 工具函数 ======
+const $ = id => document.getElementById(id);
+const ext = name => name.split('.').pop().toLowerCase();
+const fmtSize = b => b<1024?b+'B':b<1048576?(b/1024).toFixed(1)+'KB':(b/1048576).toFixed(1)+'MB';
+
+const ICONS = {pdf:'📕',docx:'📘',doc:'📘',pptx:'📙',xlsx:'📗',xls:'📗',csv:'📗',txt:'📝',html:'🌐',htm:'🌐',md:'📋',png:'🖼️',jpg:'🖼️',jpeg:'🖼️',gif:'🖼️',bmp:'🖼️',webp:'🖼️',tiff:'🖼️',svg:'🖼️'};
+
+// 转换路由
+const ROUTES = {
+  md:      [{f:'html',n:'HTML'},{f:'pdf',n:'PDF'}],
+  html:    [{f:'pdf',n:'PDF'},{f:'txt',n:'TXT'},{f:'md',n:'Markdown'}],
+  htm:     [{f:'pdf',n:'PDF'},{f:'txt',n:'TXT'}],
+  txt:     [{f:'pdf',n:'PDF'},{f:'docx',n:'Word'}],
+  png:     [{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'bmp',n:'BMP'},{f:'ico',n:'ICO'},{f:'pdf',n:'PDF'}],
+  jpg:     [{f:'png',n:'PNG'},{f:'webp',n:'WebP'},{f:'bmp',n:'BMP'},{f:'ico',n:'ICO'},{f:'pdf',n:'PDF'}],
+  jpeg:    [{f:'png',n:'PNG'},{f:'webp',n:'WebP'},{f:'bmp',n:'BMP'},{f:'ico',n:'ICO'},{f:'pdf',n:'PDF'}],
+  webp:    [{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'bmp',n:'BMP'},{f:'pdf',n:'PDF'}],
+  bmp:     [{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'pdf',n:'PDF'}],
+  gif:     [{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'pdf',n:'PDF'}],
+  svg:     [{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'pdf',n:'PDF'}],
+  xlsx:    [{f:'csv',n:'CSV'},{f:'html',n:'HTML'}],
+  xls:     [{f:'csv',n:'CSV'},{f:'xlsx',n:'XLSX'}],
+  csv:     [{f:'xlsx',n:'Excel'},{f:'txt',n:'TXT'},{f:'html',n:'HTML'}],
+};
+
+// ====== 标签页切换 ======
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    ['convert','merge','img-merge'].forEach(id => {
+      $('panel-'+id).style.display = id===tab.dataset.tab ? 'block' : 'none';
+    });
+  });
+});
+
+// ====== 格式转换 ======
+let selFile = null, selTarget = null;
+
+function resetConvert() {
+  selFile = null; selTarget = null;
+  fileInfo.classList.remove('show'); fmtSection.classList.remove('show');
+  convertBtn.classList.remove('show'); progress.classList.remove('show');
+  result.classList.remove('show'); result.innerHTML=''; fmtGrid.innerHTML='';
+  fileInput.value='';
+}
+
+['dragenter','dragover'].forEach(e => dropzone.addEventListener(e, ev => { ev.preventDefault(); dropzone.classList.add('dragover'); }));
+['dragleave','drop'].forEach(e => dropzone.addEventListener(e, ev => { ev.preventDefault(); dropzone.classList.remove('dragover'); }));
+dropzone.addEventListener('drop', ev => { if(ev.dataTransfer.files.length) handleFile(ev.dataTransfer.files[0]); });
+fileInput.addEventListener('change', () => { if(fileInput.files.length) handleFile(fileInput.files[0]); });
+removeBtn.addEventListener('click', resetConvert);
+
+function handleFile(file) {
+  selFile = file; selTarget = null;
+  const e = ext(file.name);
+  $('fIcon').textContent = ICONS[e] || '📄';
+  $('fName').textContent = file.name;
+  $('fSize').textContent = fmtSize(file.size);
+  fileInfo.classList.add('show');
+
+  const routes = ROUTES[e];
+  fmtGrid.innerHTML = '';
+  if(routes && routes.length) {
+    routes.forEach(r => {
+      const btn = document.createElement('div');
+      btn.className = 'fmt-btn';
+      btn.innerHTML = `<span class="ext">.${r.f}</span><span class="name">${r.n}</span>`;
+      btn.onclick = () => { selTarget=r.f; fmtGrid.querySelectorAll('.fmt-btn').forEach(b=>b.classList.remove('selected')); btn.classList.add('selected'); convertBtn.classList.add('show'); };
+      fmtGrid.appendChild(btn);
+    });
+    fmtSection.classList.add('show');
+    convertBtn.classList.remove('show');
+  } else {
+    fmtGrid.innerHTML = '<p style="color:#64748b;font-size:13px">暂不支持此格式在浏览器端转换</p>';
+    fmtSection.classList.add('show');
+  }
+}
+
+convertBtn.addEventListener('click', async () => {
+  if(!selFile||!selTarget) return;
+  convertBtn.disabled = true;
+  progress.classList.add('show');
+  bar.className = 'bar indeterminate';
+  progressText.textContent = '正在转换...';
+  result.classList.remove('show');
+
+  try {
+    const e = ext(selFile.name);
+    const key = e+'->'+selTarget;
+    let blob, outName = selFile.name.replace(/\.[^.]+$/, '')+'.'+selTarget;
+
+    if(key==='md->html')        blob = await mdToHtml(selFile);
+    else if(key==='md->pdf')    blob = await mdToPdf(selFile);
+    else if(key==='html->pdf')  blob = await htmlToPdf(selFile);
+    else if(key==='htm->pdf')   blob = await htmlToPdf(selFile);
+    else if(key==='html->txt')  blob = await htmlToTxt(selFile);
+    else if(key==='htm->txt')   blob = await htmlToTxt(selFile);
+    else if(key==='html->md')   blob = await htmlToMd(selFile);
+    else if(key==='txt->pdf')   blob = await txtToPdf(selFile);
+    else if(key==='txt->docx')  blob = await txtToDocx(selFile);
+    else if(ROUTES[e]?.find(r=>r.f===selTarget) && ['png','jpg','jpeg','webp','bmp','gif','ico','pdf'].includes(selTarget)) {
+      if(selTarget==='pdf') blob = await imgToPdf(selFile);
+      else if(e==='svg') blob = await svgConvert(selFile, selTarget);
+      else blob = await imgConvert(selFile, selTarget);
+    }
+    else if(key==='xlsx->csv')  blob = await excelToCsv(selFile);
+    else if(key==='xls->csv')   blob = await excelToCsv(selFile);
+    else if(key==='xlsx->html') blob = await excelToHtml(selFile);
+    else if(key==='xls->xlsx')  blob = await excelConvert(selFile,'xlsx');
+    else if(key==='csv->xlsx')  blob = await csvToExcel(selFile);
+    else if(key==='csv->txt')   blob = await csvToTxt(selFile);
+    else if(key==='csv->html')  blob = await csvToHtml(selFile);
+    else throw new Error('暂不支持此转换');
+
+    bar.className = 'bar';
+    progressText.textContent = '转换完成！';
+    showResult(blob, outName, result);
+  } catch(err) {
+    bar.className = 'bar';
+    bar.style.background = '#ef4444';
+    result.innerHTML = `<div class="error-box">❌ ${err.message}</div><button class="reset-btn" onclick="resetConvert()">重试</button>`;
+    result.classList.add('show');
+  } finally {
+    convertBtn.disabled = false;
+  }
+});
+
+function showResult(blob, name, container) {
+  const url = URL.createObjectURL(blob);
+  container.innerHTML = `
+    <div class="success-box">
+      <div class="s-icon">✅</div>
+      <div class="s-title">转换完成</div>
+      <div class="s-sub">${name}</div>
+      <a class="dl-btn" href="${url}" download="${name}">⬇ 下载文件</a>
+    </div>
+    <button class="reset-btn" onclick="resetConvert()">转换其他文件</button>`;
+  container.classList.add('show');
+  // 自动下载
+  const a = document.createElement('a'); a.href=url; a.download=name; a.click();
+}
+
+// ====== 转换实现 ======
+
+// 读取文件为 text
+function readText(file) { return file.text(); }
+function readFileAsArrayBuffer(file) { return file.arrayBuffer(); }
+
+// --- MD → HTML ---
+async function mdToHtml(file) {
+  const md = await readText(file);
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{font-family:system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 20px;line-height:1.8;color:#1e293b}
+h1,h2,h3{color:#0f172a;border-bottom:1px solid #e2e8f0;padding-bottom:6px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:.9em}
+pre{background:#f8fafc;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #e2e8f0}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #e2e8f0;padding:10px 14px}
+th{background:#f1f5f9}blockquote{border-left:4px solid #6366f1;margin:0;padding:10px 20px;color:#64748b}
+img{max-width:100%}a{color:#6366f1}</style></head><body>${marked.parse(md)}</body></html>`;
+  return new Blob([html], {type:'text/html;charset=utf-8'});
+}
+
+// --- MD → PDF ---
+async function mdToPdf(file) {
+  const md = await readText(file);
+  const div = document.createElement('div');
+  div.innerHTML = marked.parse(md);
+  div.style.cssText = 'font-family:system-ui,sans-serif;padding:20px;line-height:1.8;color:#1e293b;max-width:800px';
+  document.body.appendChild(div);
+  try {
+    const opt = {margin:[10,10,10,10], filename:'output.pdf', html2canvas:{scale:2}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}};
+    return await html2pdf().set(opt).from(div).outputPdf('blob');
+  } finally { document.body.removeChild(div); }
+}
+
+// --- HTML → PDF ---
+async function htmlToPdf(file) {
+  const html = await readText(file);
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;left:-9999px;width:800px;height:600px';
+  document.body.appendChild(iframe);
+  iframe.srcdoc = html;
+  await new Promise(r => iframe.onload = r);
+  await new Promise(r => setTimeout(r, 500));
+  try {
+    const opt = {margin:[10,10,10,10], filename:'output.pdf', html2canvas:{scale:2}, jsPDF:{unit:'mm',format:'a4'}};
+    return await html2pdf().set(opt).from(iframe.contentDocument.body).outputPdf('blob');
+  } finally { document.body.removeChild(iframe); }
+}
+
+// --- HTML → TXT ---
+async function htmlToTxt(file) {
+  const html = await readText(file);
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  const txt = div.textContent || div.innerText || '';
+  return new Blob([txt], {type:'text/plain;charset=utf-8'});
+}
+
+// --- HTML → MD ---
+async function htmlToMd(file) {
+  const html = await readText(file);
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  let md = '';
+  function walk(node) {
+    if(node.nodeType===3) { md += node.textContent; return; }
+    if(node.nodeType!==1) return;
+    const tag = node.tagName.toLowerCase();
+    if(tag==='h1') md += '# ';
+    else if(tag==='h2') md += '## ';
+    else if(tag==='h3') md += '### ';
+    else if(tag==='h4') md += '#### ';
+    else if(tag==='strong'||tag==='b') md += '**';
+    else if(tag==='em'||tag==='i') md += '*';
+    else if(tag==='li') md += '- ';
+    else if(tag==='br') { md += '\n'; return; }
+    else if(tag==='p'||tag==='div') md += '\n';
+    node.childNodes.forEach(walk);
+    if(['h1','h2','h3','h4','p','div','li','blockquote'].includes(tag)) md += '\n';
+    if(tag==='strong'||tag==='b') md += '**';
+    if(tag==='em'||tag==='i') md += '*';
+  }
+  walk(div);
+  md = md.replace(/\n{3,}/g, '\n\n').trim();
+  return new Blob([md], {type:'text/markdown;charset=utf-8'});
+}
+
+// --- TXT → PDF ---
+async function txtToPdf(file) {
+  const text = await readText(file);
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'mm', format:'a4'});
+  const lines = doc.splitTextToSize(text, 180);
+  doc.setFontSize(11);
+  let y = 20;
+  lines.forEach(line => {
+    if(y > 277) { doc.addPage(); y = 20; }
+    doc.text(line, 15, y);
+    y += 6;
+  });
+  return doc.output('blob');
+}
+
+// --- TXT → DOCX ---
+async function txtToDocx(file) {
+  const text = await readText(file);
+  const { Document, Packer, Paragraph, TextRun } = docx;
+  const paragraphs = text.split('\n').map(line =>
+    new Paragraph({ children: [new TextRun({ text: line, size: 22 })] })
+  );
+  const doc = new Document({ sections: [{ children: paragraphs }] });
+  const blob = await Packer.toBlob(doc);
+  return blob;
+}
+
+// --- 图片格式转换 ---
+async function imgConvert(file, targetFmt) {
+  const img = await loadImage(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  // JPG/BMP 不支持透明
+  if(['jpg','jpeg','bmp'].includes(targetFmt)) {
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+  ctx.drawImage(img, 0, 0);
+  const mimeMap = {png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',bmp:'image/bmp',ico:'image/x-icon'};
+  const quality = targetFmt==='webp'?0.92:0.95;
+  return new Promise(r => canvas.toBlob(r, mimeMap[targetFmt]||'image/png', quality));
+}
+
+async function svgConvert(file, targetFmt) {
+  const svgText = await readText(file);
+  const blob = new Blob([svgText], {type:'image/svg+xml'});
+  const img = await loadImage(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth || 800; canvas.height = img.naturalHeight || 600;
+  canvas.getContext('2d').drawImage(img, 0, 0);
+  const mimeMap = {png:'image/png',jpg:'image/jpeg',pdf:null};
+  if(targetFmt==='pdf') return imgToPdfFromCanvas(canvas);
+  return new Promise(r => canvas.toBlob(r, mimeMap[targetFmt]||'image/png', 0.95));
+}
+
+function loadImage(blobOrFile) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(blobOrFile);
+  });
+}
+
+// --- 图片 → PDF ---
+async function imgToPdf(file) {
+  const img = await loadImage(file);
+  const { jsPDF } = window.jspdf;
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const orientation = w > h ? 'landscape' : 'portrait';
+  const doc = new jsPDF({unit:'px', format:[w, h], orientation});
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+  doc.addImage(dataUrl, 'JPEG', 0, 0, w, h);
+  return doc.output('blob');
+}
+
+function imgToPdfFromCanvas(canvas) {
+  const { jsPDF } = window.jspdf;
+  const w = canvas.width, h = canvas.height;
+  const doc = new jsPDF({unit:'px', format:[w, h], orientation: w>h?'landscape':'portrait'});
+  doc.addImage(canvas.toDataURL('image/jpeg',0.95), 'JPEG', 0, 0, w, h);
+  return doc.output('blob');
+}
+
+// --- Excel/CSV ---
+async function excelToCsv(file) {
+  const data = await readFileAsArrayBuffer(file);
+  const wb = XLSX.read(data, {type:'array'});
+  const csv = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);
+  return new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
+}
+
+async function excelConvert(file, fmt) {
+  const data = await readFileAsArrayBuffer(file);
+  const wb = XLSX.read(data, {type:'array'});
+  const out = XLSX.write(wb, {bookType:fmt, type:'array'});
+  return new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+
+async function excelToHtml(file) {
+  const data = await readFileAsArrayBuffer(file);
+  const wb = XLSX.read(data, {type:'array'});
+  let html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px}th{background:#f5f5f5}</style></head><body>';
+  wb.SheetNames.forEach(name => {
+    html += `<h3>${name}</h3>${XLSX.utils.sheet_to_html(wb.Sheets[name])}`;
+  });
+  html += '</body></html>';
+  return new Blob([html], {type:'text/html;charset=utf-8'});
+}
+
+async function csvToExcel(file) {
+  const text = await readText(file);
+  const wb = XLSX.read(text, {type:'string'});
+  const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  return new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+
+async function csvToTxt(file) {
+  const text = await readText(file);
+  return new Blob([text], {type:'text/plain;charset=utf-8'});
+}
+
+async function csvToHtml(file) {
+  const text = await readText(file);
+  const wb = XLSX.read(text, {type:'string'});
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px}th{background:#f5f5f5}</style></head><body>${XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]])}</body></html>`;
+  return new Blob([html], {type:'text/html;charset=utf-8'});
+}
+
+// ====== PDF 合并 ======
+let mergeFiles = [];
+$('dropMerge').addEventListener('dragover', e => { e.preventDefault(); $('dropMerge').classList.add('dragover'); });
+$('dropMerge').addEventListener('dragleave', () => $('dropMerge').classList.remove('dragover'));
+$('dropMerge').addEventListener('drop', e => { e.preventDefault(); $('dropMerge').classList.remove('dragover'); addMergeFiles(e.dataTransfer.files); });
+$('mergeInput').addEventListener('change', () => addMergeFiles($('mergeInput').files));
+
+function addMergeFiles(files) {
+  Array.from(files).forEach(f => { if(ext(f.name)==='pdf') mergeFiles.push(f); });
+  renderMergeList();
+}
+
+function renderMergeList() {
+  $('mergeList').innerHTML = mergeFiles.map((f,i) =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#0f172a;border:1px solid #334155;border-radius:8px;margin-bottom:6px">
+      <span style="color:#64748b;font-size:12px">#${i+1}</span>
+      <span style="flex:1;font-size:13px;color:#e2e8f0">📕 ${f.name}</span>
+      <span style="font-size:11px;color:#64748b">${fmtSize(f.size)}</span>
+      <button onclick="mergeFiles.splice(${i},1);renderMergeList()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:16px">✕</button>
+    </div>`
+  ).join('');
+  $('mergeBtn').style.display = mergeFiles.length >= 2 ? 'block' : 'none';
+}
+
+$('mergeBtn').addEventListener('click', async () => {
+  if(mergeFiles.length < 2) return;
+  $('mergeProgress').classList.add('show');
+  $('mergeBtn').disabled = true;
+  try {
+    const { PDFDocument } = PDFLib;
+    const merged = await PDFDocument.create();
+    for(const f of mergeFiles) {
+      const buf = await f.arrayBuffer();
+      const src = await PDFDocument.load(buf);
+      const pages = await merged.copyPages(src, src.getPageIndices());
+      pages.forEach(p => merged.addPage(p));
+    }
+    const bytes = await merged.save();
+    const blob = new Blob([bytes], {type:'application/pdf'});
+    showResult(blob, '合并结果.pdf', $('mergeResult'));
+  } catch(err) {
+    $('mergeResult').innerHTML = `<div class="error-box">❌ ${err.message}</div>`;
+    $('mergeResult').classList.add('show');
+  } finally {
+    $('mergeProgress').classList.remove('show');
+    $('mergeBtn').disabled = false;
+  }
+});
+
+// ====== 图片合并 PDF ======
+let imgFiles = [];
+$('dropImg').addEventListener('dragover', e => { e.preventDefault(); $('dropImg').classList.add('dragover'); });
+$('dropImg').addEventListener('dragleave', () => $('dropImg').classList.remove('dragover'));
+$('dropImg').addEventListener('drop', e => { e.preventDefault(); $('dropImg').classList.remove('dragover'); addImgFiles(e.dataTransfer.files); });
+$('imgInput').addEventListener('change', () => addImgFiles($('imgInput').files));
+
+function addImgFiles(files) {
+  Array.from(files).forEach(f => { if(f.type.startsWith('image/')) imgFiles.push(f); });
+  renderImgList();
+}
+
+function renderImgList() {
+  $('imgList').innerHTML = imgFiles.map((f,i) => {
+    const url = URL.createObjectURL(f);
+    return `<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;border:1px solid #334155">
+      <img src="${url}" style="width:100%;height:100%;object-fit:cover">
+      <button onclick="imgFiles.splice(${i},1);renderImgList()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);border:none;color:white;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:10px;line-height:18px;text-align:center">✕</button>
+    </div>`;
+  }).join('');
+  $('imgMergeBtn').style.display = imgFiles.length >= 1 ? 'block' : 'none';
+}
+
+$('imgMergeBtn').addEventListener('click', async () => {
+  if(!imgFiles.length) return;
+  $('imgProgress').classList.add('show');
+  $('imgMergeBtn').disabled = true;
+  try {
+    const { jsPDF } = window.jspdf;
+    let doc = null;
+    for(const f of imgFiles) {
+      const img = await loadImage(f);
+      const w = img.naturalWidth, h = img.naturalHeight;
+      if(!doc) doc = new jsPDF({unit:'px', format:[w, h], orientation: w>h?'landscape':'portrait'});
+      else { doc.addPage([w, h], w>h?'landscape':'portrait'); }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      doc.addImage(canvas.toDataURL('image/jpeg',0.95), 'JPEG', 0, 0, w, h);
+    }
+    const blob = doc.output('blob');
+    showResult(blob, '图片合并.pdf', $('imgResult'));
+  } catch(err) {
+    $('imgResult').innerHTML = `<div class="error-box">❌ ${err.message}</div>`;
+    $('imgResult').classList.add('show');
+  } finally {
+    $('imgProgress').classList.remove('show');
+    $('imgMergeBtn').disabled = false;
+  }
+});
+</script>
+
+</body>
+</html>

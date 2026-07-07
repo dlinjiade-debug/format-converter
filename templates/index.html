@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件格式转换器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 680px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            padding: 32px;
+            text-align: center;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.85;
+        }
+
+        .body {
+            padding: 32px;
+        }
+
+        /* 拖拽上传区 */
+        .dropzone {
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #fafafa;
+            position: relative;
+        }
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: #6366f1;
+            background: #eef2ff;
+        }
+
+        .dropzone .icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .dropzone .text {
+            font-size: 16px;
+            color: #6b7280;
+        }
+
+        .dropzone .text strong {
+            color: #6366f1;
+        }
+
+        .dropzone .hint {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 8px;
+        }
+
+        .dropzone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* 已选文件 */
+        .file-info {
+            display: none;
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 16px;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .file-info.show { display: flex; }
+
+        .file-info .file-icon {
+            font-size: 32px;
+            flex-shrink: 0;
+        }
+
+        .file-info .file-details {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-info .file-name {
+            font-weight: 600;
+            color: #166534;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-info .file-size {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .file-info .remove-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #9ca3af;
+            padding: 4px;
+        }
+
+        .file-info .remove-btn:hover { color: #ef4444; }
+
+        /* 格式选择 */
+        .format-section {
+            margin-top: 24px;
+            display: none;
+        }
+
+        .format-section.show { display: block; }
+
+        .format-section label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .format-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 8px;
+        }
+
+        .format-btn {
+            padding: 10px 14px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+            font-size: 13px;
+        }
+
+        .format-btn:hover {
+            border-color: #6366f1;
+            background: #eef2ff;
+        }
+
+        .format-btn.selected {
+            border-color: #6366f1;
+            background: #6366f1;
+            color: white;
+        }
+
+        .format-btn .ext {
+            font-weight: 700;
+            font-size: 14px;
+            display: block;
+        }
+
+        .format-btn .name {
+            font-size: 11px;
+            opacity: 0.75;
+            margin-top: 2px;
+        }
+
+        /* 转换按钮 */
+        .convert-btn {
+            width: 100%;
+            padding: 14px;
+            margin-top: 24px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: none;
+        }
+
+        .convert-btn.show { display: block; }
+
+        .convert-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(99,102,241,0.4);
+        }
+
+        .convert-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* 进度条 */
+        .progress-section {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress-section.show { display: block; }
+
+        .progress-bar-bg {
+            background: #e5e7eb;
+            border-radius: 8px;
+            height: 8px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+            border-radius: 8px;
+            width: 0%;
+            transition: width 0.3s;
+            animation: progress-pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes progress-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .progress-text {
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* 结果 */
+        .result-section {
+            margin-top: 20px;
+            display: none;
+            text-align: center;
+        }
+
+        .result-section.show { display: block; }
+
+        .result-success {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 10px;
+            padding: 24px;
+        }
+
+        .result-success .icon { font-size: 48px; margin-bottom: 8px; }
+        .result-success .title { font-weight: 600; color: #166534; font-size: 16px; }
+        .result-success .download-btn {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 10px 24px;
+            background: #16a34a;
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .result-success .download-btn:hover { background: #15803d; }
+
+        .result-error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            padding: 20px;
+            color: #991b1b;
+        }
+
+        /* 重来按钮 */
+        .reset-btn {
+            margin-top: 16px;
+            padding: 8px 20px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: white;
+            color: #6b7280;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .reset-btn:hover {
+            border-color: #6366f1;
+            color: #6366f1;
+        }
+
+        /* 支持格式列表 */
+        .supported {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #f3f4f6;
+        }
+
+        .supported h3 {
+            font-size: 13px;
+            color: #9ca3af;
+            font-weight: 500;
+            margin-bottom: 12px;
+        }
+
+        .format-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .format-tag {
+            padding: 4px 10px;
+            background: #f3f4f6;
+            border-radius: 6px;
+            font-size: 11px;
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        /* 响应式 */
+        @media (max-width: 480px) {
+            .body { padding: 20px; }
+            .header { padding: 24px; }
+            .header h1 { font-size: 22px; }
+            .format-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 文件格式转换器</h1>
+            <p>支持 PDF、Word、PPT、Excel、图片、Markdown 等格式互转</p>
+        </div>
+
+        <div class="body">
+            <!-- 上传区 -->
+            <div class="dropzone" id="dropzone">
+                <div class="icon">📄</div>
+                <div class="text">拖拽文件到此处，或 <strong>点击选择文件</strong></div>
+                <div class="hint">支持最大 100MB 的文件</div>
+                <input type="file" id="fileInput">
+            </div>
+
+            <!-- 已选文件 -->
+            <div class="file-info" id="fileInfo">
+                <div class="file-icon" id="fileIcon">📄</div>
+                <div class="file-details">
+                    <div class="file-name" id="fileName"></div>
+                    <div class="file-size" id="fileSize"></div>
+                </div>
+                <button class="remove-btn" id="removeBtn" title="移除文件">✕</button>
+            </div>
+
+            <!-- 目标格式 -->
+            <div class="format-section" id="formatSection">
+                <label>选择目标格式：</label>
+                <div class="format-grid" id="formatGrid"></div>
+            </div>
+
+            <!-- 转换按钮 -->
+            <button class="convert-btn" id="convertBtn">开始转换</button>
+
+            <!-- 进度 -->
+            <div class="progress-section" id="progressSection">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="progress-text" id="progressText">正在转换中...</div>
+            </div>
+
+            <!-- 结果 -->
+            <div class="result-section" id="resultSection"></div>
+
+            <!-- 支持格式 -->
+            <div class="supported">
+                <h3>支持的格式</h3>
+                <div class="format-tags">
+                    <span class="format-tag">PDF</span>
+                    <span class="format-tag">DOCX</span>
+                    <span class="format-tag">PPTX</span>
+                    <span class="format-tag">XLSX</span>
+                    <span class="format-tag">CSV</span>
+                    <span class="format-tag">TXT</span>
+                    <span class="format-tag">HTML</span>
+                    <span class="format-tag">Markdown</span>
+                    <span class="format-tag">PNG</span>
+                    <span class="format-tag">JPG</span>
+                    <span class="format-tag">BMP</span>
+                    <span class="format-tag">TIFF</span>
+                    <span class="format-tag">WebP</span>
+                    <span class="format-tag">GIF</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileIcon = document.getElementById('fileIcon');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const removeBtn = document.getElementById('removeBtn');
+        const formatSection = document.getElementById('formatSection');
+        const formatGrid = document.getElementById('formatGrid');
+        const convertBtn = document.getElementById('convertBtn');
+        const progressSection = document.getElementById('progressSection');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const resultSection = document.getElementById('resultSection');
+
+        let selectedFile = null;
+        let selectedTarget = null;
+
+        // 格式图标映射
+        const formatIcons = {
+            pdf: '📕', docx: '📘', doc: '📘', pptx: '📙', ppt: '📙',
+            xlsx: '📗', xls: '📗', csv: '📗', txt: '📝', html: '🌐',
+            htm: '🌐', md: '📋', png: '🖼️', jpg: '🖼️', jpeg: '🖼️',
+            gif: '🖼️', bmp: '🖼️', tiff: '🖼️', webp: '🖼️',
+        };
+
+        function getFileExt(name) {
+            return name.split('.').pop().toLowerCase();
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function resetUI() {
+            selectedFile = null;
+            selectedTarget = null;
+            fileInfo.classList.remove('show');
+            formatSection.classList.remove('show');
+            convertBtn.classList.remove('show');
+            progressSection.classList.remove('show');
+            resultSection.classList.remove('show');
+            resultSection.innerHTML = '';
+            formatGrid.innerHTML = '';
+            fileInput.value = '';
+        }
+
+        // 拖拽事件
+        ['dragenter', 'dragover'].forEach(e => {
+            dropzone.addEventListener(e, ev => {
+                ev.preventDefault();
+                dropzone.classList.add('dragover');
+            });
+        });
+        ['dragleave', 'drop'].forEach(e => {
+            dropzone.addEventListener(e, ev => {
+                ev.preventDefault();
+                dropzone.classList.remove('dragover');
+            });
+        });
+        dropzone.addEventListener('drop', ev => {
+            const files = ev.dataTransfer.files;
+            if (files.length) handleFile(files[0]);
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length) handleFile(fileInput.files[0]);
+        });
+
+        removeBtn.addEventListener('click', resetUI);
+
+        async function handleFile(file) {
+            selectedFile = file;
+            selectedTarget = null;
+
+            const ext = getFileExt(file.name);
+            fileIcon.textContent = formatIcons[ext] || '📄';
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.classList.add('show');
+
+            // 获取可用目标格式
+            try {
+                const res = await fetch('/api/targets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ format: ext }),
+                });
+                const data = await res.json();
+
+                formatGrid.innerHTML = '';
+                if (data.targets && data.targets.length > 0) {
+                    data.targets.forEach(t => {
+                        const btn = document.createElement('div');
+                        btn.className = 'format-btn';
+                        btn.innerHTML = `<span class="ext">.${t.format}</span><span class="name">${t.name}</span>`;
+                        btn.addEventListener('click', () => selectTarget(t.format, btn));
+                        formatGrid.appendChild(btn);
+                    });
+                    formatSection.classList.add('show');
+                    convertBtn.classList.remove('show');
+                } else {
+                    formatGrid.innerHTML = '<p style="color:#9ca3af;font-size:14px;">暂不支持此格式的转换</p>';
+                    formatSection.classList.add('show');
+                }
+            } catch (err) {
+                alert('获取格式信息失败: ' + err.message);
+            }
+        }
+
+        function selectTarget(format, btn) {
+            selectedTarget = format;
+            document.querySelectorAll('.format-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            convertBtn.classList.add('show');
+        }
+
+        convertBtn.addEventListener('click', async () => {
+            if (!selectedFile || !selectedTarget) return;
+
+            convertBtn.disabled = true;
+            progressSection.classList.add('show');
+            progressBar.style.width = '30%';
+            progressText.textContent = '正在上传文件...';
+            resultSection.classList.remove('show');
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('target', selectedTarget);
+
+            try {
+                progressBar.style.width = '60%';
+                progressText.textContent = '正在转换中...';
+
+                const res = await fetch('/api/convert', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({ error: '转换失败' }));
+                    throw new Error(errData.error || '转换失败');
+                }
+
+                progressBar.style.width = '100%';
+                progressText.textContent = '转换完成！';
+
+                // 下载文件
+                const blob = await res.blob();
+                const contentDisp = res.headers.get('Content-Disposition');
+                let downloadName = `${selectedFile.name.split('.')[0]}.${selectedTarget}`;
+                if (contentDisp) {
+                    const match = contentDisp.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                    if (match) downloadName = match[1].replace(/['"]/g, '');
+                }
+
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = downloadName;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                resultSection.innerHTML = `
+                    <div class="result-success">
+                        <div class="icon">✅</div>
+                        <div class="title">转换成功！</div>
+                        <p style="font-size:13px;color:#6b7280;margin-top:4px;">文件已自动开始下载</p>
+                        <a class="download-btn" href="${url}" download="${downloadName}" onclick="event.preventDefault();this.href='${url}';">再次下载</a>
+                    </div>
+                    <button class="reset-btn" onclick="resetUI()">转换其他文件</button>
+                `;
+                resultSection.classList.add('show');
+
+            } catch (err) {
+                progressBar.style.width = '100%';
+                progressBar.style.background = '#ef4444';
+                progressText.textContent = '转换失败';
+
+                resultSection.innerHTML = `
+                    <div class="result-error">
+                        <p>❌ ${err.message}</p>
+                    </div>
+                    <button class="reset-btn" onclick="resetUI()">重试</button>
+                `;
+                resultSection.classList.add('show');
+            } finally {
+                convertBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
