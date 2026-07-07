@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>万能格式转换器</title>
+<title>linjiade 的转换器</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx@9.1.1/build/index.min.js"></script>
@@ -11,650 +13,796 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.mjs" type="module"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px;color:#e2e8f0}
-.top-bar{width:100%;max-width:720px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
-.top-bar h2{font-size:14px;color:#64748b;font-weight:400}
-.top-bar a{color:#60a5fa;font-size:13px;text-decoration:none}
-.top-bar a:hover{text-decoration:underline}
-.card{background:#1e293b;border:1px solid #334155;border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,0.4);width:100%;max-width:720px;overflow:hidden}
-.header{background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a78bfa 100%);padding:36px 32px;text-align:center;position:relative;overflow:hidden}
-.header::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(255,255,255,0.1) 0%,transparent 60%);pointer-events:none}
-.header h1{font-size:30px;font-weight:800;color:white;text-shadow:0 2px 10px rgba(0,0,0,0.2);position:relative}
-.header p{font-size:14px;color:rgba(255,255,255,0.85);margin-top:6px;position:relative}
-.body{padding:32px}
-/* Tabs */
-.tabs{display:flex;gap:4px;margin-bottom:24px;background:#0f172a;border-radius:12px;padding:4px}
-.tab{flex:1;padding:10px 8px;border:none;border-radius:10px;background:transparent;color:#94a3b8;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
-.tab.active{background:#6366f1;color:white;box-shadow:0 2px 10px rgba(99,102,241,0.3)}
-.tab:hover:not(.active){background:#1e293b;color:#e2e8f0}
-/* Drop */
-.dropzone{border:2px dashed #475569;border-radius:14px;padding:44px 24px;text-align:center;cursor:pointer;transition:all .3s;background:#0f172a;position:relative}
-.dropzone:hover,.dropzone.dragover{border-color:#818cf8;background:#1e1b4b}
-.dropzone .icon{font-size:52px;margin-bottom:10px;display:block}
-.dropzone .text{font-size:15px;color:#94a3b8}
-.dropzone .text strong{color:#a78bfa}
-.dropzone .hint{font-size:12px;color:#64748b;margin-top:6px}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#FAFAF8;--surface:#FFFFFF;--border:rgba(0,0,0,0.06);
+  --text:#1A1A1A;--text2:#6B6B6B;--text3:#9B9B9B;
+  --accent:#2D2D2D;--accent-hover:#444;
+  --pastel-blue:#E8F4FD;--pastel-blue-t:#1A6B8A;
+  --pastel-green:#ECF5EC;--pastel-green-t:#2D6A2E;
+  --pastel-rose:#FDF0F0;--pastel-rose-t:#8A2D2D;
+  --pastel-amber:#FDF6E8;--pastel-amber-t:#8A6B1A;
+  --pastel-violet:#F3EDFD;--pastel-violet-t:#5B2D8A;
+  --radius:12px;--radius-lg:20px;
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.04);
+  --shadow-md:0 4px 20px rgba(0,0,0,0.06);
+  --shadow-lg:0 12px 40px rgba(0,0,0,0.08);
+  --font-serif:'Playfair Display',Georgia,'Noto Serif SC',serif;
+  --font-sans:'Plus Jakarta Sans','SF Pro Display','Microsoft YaHei',system-ui,sans-serif;
+}
+html{font-size:16px;-webkit-font-smoothing:antialiased}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh}
+
+/* ===== Layout ===== */
+.page{max-width:780px;margin:0 auto;padding:48px 24px 80px}
+.hero{text-align:center;margin-bottom:56px}
+.hero-label{display:inline-block;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:5px 16px;margin-bottom:20px}
+.hero h1{font-family:var(--font-serif);font-size:clamp(36px,6vw,56px);font-weight:700;letter-spacing:-0.03em;line-height:1.1;color:var(--text);margin-bottom:14px}
+.hero h1 span{color:var(--text3);font-weight:500}
+.hero p{font-size:15px;color:var(--text2);max-width:460px;margin:0 auto;line-height:1.7}
+
+/* ===== Card ===== */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);overflow:hidden;transition:box-shadow .3s}
+.card:hover{box-shadow:var(--shadow-lg)}
+
+/* ===== Tabs ===== */
+.tabs{display:flex;border-bottom:1px solid var(--border);padding:0 8px}
+.tab{flex:1;padding:14px 8px;border:none;background:transparent;font-family:var(--font-sans);font-size:13px;font-weight:600;color:var(--text3);cursor:pointer;transition:all .2s;border-bottom:2px solid transparent;margin-bottom:-1px;letter-spacing:0.01em}
+.tab:hover{color:var(--text2)}
+.tab.active{color:var(--text);border-bottom-color:var(--text)}
+.card-body{padding:32px}
+
+/* ===== Dropzone ===== */
+.dropzone{border:1.5px dashed rgba(0,0,0,0.12);border-radius:var(--radius);padding:52px 24px;text-align:center;cursor:pointer;transition:all .3s;background:var(--bg);position:relative}
+.dropzone:hover,.dropzone.dragover{border-color:var(--accent);background:var(--surface);box-shadow:var(--shadow-sm)}
+.dropzone svg{width:40px;height:40px;color:var(--text3);margin-bottom:14px}
+.dropzone .dz-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px}
+.dropzone .dz-sub{font-size:13px;color:var(--text3)}
+.dropzone .dz-sub strong{color:var(--accent);font-weight:600;cursor:pointer}
 .dropzone input{position:absolute;inset:0;opacity:0;cursor:pointer}
-/* File info */
-.file-info{display:none;background:#1a2332;border:1px solid #334155;border-radius:12px;padding:16px;margin-top:16px;align-items:center;gap:12px}
+
+/* ===== File info ===== */
+.file-info{display:none;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-top:16px;align-items:center;gap:14px}
 .file-info.show{display:flex}
-.file-icon{font-size:34px;flex-shrink:0}
-.file-details{flex:1;min-width:0}
-.file-name{font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
-.file-size{font-size:12px;color:#64748b;margin-top:2px}
-.remove-btn{background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;padding:4px 8px;border-radius:6px;transition:all .2s}
-.remove-btn:hover{color:#f87171;background:#1e1b4b}
-/* Formats */
-.fmt-section{margin-top:22px;display:none}
+.fi-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;letter-spacing:0.02em;text-transform:uppercase;flex-shrink:0}
+.fi-icon.pdf{background:var(--pastel-rose);color:var(--pastel-rose-t)}
+.fi-icon.doc{background:var(--pastel-blue);color:var(--pastel-blue-t)}
+.fi-icon.ppt{background:var(--pastel-amber);color:var(--pastel-amber-t)}
+.fi-icon.xls{background:var(--pastel-green);color:var(--pastel-green-t)}
+.fi-icon.img{background:var(--pastel-violet);color:var(--pastel-violet-t)}
+.fi-icon.txt{background:var(--bg);color:var(--text2);border:1px solid var(--border)}
+.fi-icon.web{background:var(--pastel-blue);color:var(--pastel-blue-t)}
+.fi-name{font-weight:600;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fi-size{font-size:12px;color:var(--text3);margin-top:2px}
+.fi-details{flex:1;min-width:0}
+.fi-remove{background:none;border:none;cursor:pointer;color:var(--text3);padding:6px;border-radius:8px;transition:all .15s}
+.fi-remove:hover{background:var(--pastel-rose);color:var(--pastel-rose-t)}
+
+/* ===== Format grid ===== */
+.fmt-section{margin-top:24px;display:none}
 .fmt-section.show{display:block}
-.fmt-section label{display:block;font-weight:700;color:#cbd5e1;margin-bottom:10px;font-size:14px}
-.fmt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:8px}
-.fmt-btn{padding:10px 8px;border:2px solid #334155;border-radius:10px;background:#0f172a;cursor:pointer;text-align:center;transition:all .2s}
-.fmt-btn:hover{border-color:#818cf8;background:#1e1b4b}
-.fmt-btn.selected{border-color:#6366f1;background:#6366f1;color:white}
-.fmt-btn .ext{font-weight:800;font-size:14px;display:block}
-.fmt-btn .name{font-size:10px;opacity:.7;margin-top:2px}
-/* Convert */
-.convert-btn{width:100%;padding:15px;margin-top:24px;border:none;border-radius:12px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;font-size:16px;font-weight:700;cursor:pointer;transition:all .3s;display:none;letter-spacing:1px}
+.fmt-section label{display:block;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text3);margin-bottom:10px}
+.fmt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px}
+.fmt-btn{padding:12px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface);cursor:pointer;text-align:center;transition:all .2s;position:relative}
+.fmt-btn:hover{border-color:var(--accent);box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+.fmt-btn.selected{border-color:var(--accent);background:var(--accent);color:white}
+.fmt-btn .ext{font-weight:700;font-size:14px;display:block;letter-spacing:0.01em}
+.fmt-btn .name{font-size:10px;opacity:.6;margin-top:2px}
+
+/* ===== Button ===== */
+.convert-btn{width:100%;padding:15px;margin-top:24px;border:none;border-radius:var(--radius);background:var(--accent);color:white;font-family:var(--font-sans);font-size:15px;font-weight:600;cursor:pointer;transition:all .25s;display:none;letter-spacing:0.01em}
 .convert-btn.show{display:block}
-.convert-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(99,102,241,0.4)}
-.convert-btn:disabled{opacity:.5;cursor:not-allowed}
-/* Progress */
+.convert-btn:hover:not(:disabled){background:var(--accent-hover);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,0.15)}
+.convert-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* ===== Progress ===== */
 .progress{margin-top:20px;display:none}
 .progress.show{display:block}
-.bar-bg{background:#0f172a;border-radius:8px;height:6px;overflow:hidden}
-.bar{height:100%;background:linear-gradient(90deg,#6366f1,#a78bfa);border-radius:8px;width:0;transition:width .4s}
-.bar.indeterminate{width:100%;background:repeating-linear-gradient(90deg,#6366f1 0%,#a78bfa 50%,#6366f1 100%);background-size:200% 100%;animation:slide 1.5s infinite}
+.bar-track{background:var(--bg);border-radius:6px;height:4px;overflow:hidden}
+.bar{height:100%;background:var(--accent);border-radius:6px;width:0;transition:width .4s}
+.bar.indeterminate{width:100%;background:repeating-linear-gradient(90deg,var(--accent) 0%,var(--text3) 50%,var(--accent) 100%);background-size:200% 100%;animation:slide 1.5s infinite}
 @keyframes slide{0%{background-position:200% 0}100%{background-position:-200% 0}}
-.progress-text{font-size:12px;color:#64748b;margin-top:8px;text-align:center}
-/* Result */
+.progress-label{font-size:12px;color:var(--text3);margin-top:8px;text-align:center}
+
+/* ===== Result ===== */
 .result{margin-top:20px;display:none;text-align:center}
 .result.show{display:block}
-.success-box{background:#0f2a1a;border:1px solid #22c55e33;border-radius:12px;padding:24px}
-.success-box .s-icon{font-size:44px;margin-bottom:6px}
-.success-box .s-title{font-weight:700;color:#4ade80;font-size:16px}
-.success-box .s-sub{font-size:13px;color:#64748b;margin-top:4px}
-.dl-btn{display:inline-block;margin-top:14px;padding:10px 28px;background:#22c55e;color:white;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;transition:all .2s;cursor:pointer;border:none}
-.dl-btn:hover{background:#16a34a;transform:translateY(-1px)}
-.error-box{background:#2a0f0f;border:1px solid #ef444433;border-radius:12px;padding:20px;color:#fca5a5;font-size:14px}
-.reset-btn{margin-top:16px;padding:8px 24px;border:1px solid #475569;border-radius:10px;background:transparent;color:#94a3b8;font-size:13px;cursor:pointer;transition:all .2s}
-.reset-btn:hover{border-color:#818cf8;color:#a78bfa}
-/* Supported */
-.supported{margin-top:28px;padding-top:20px;border-top:1px solid #1e293b}
-.supported h3{font-size:12px;color:#475569;font-weight:500;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px}
-.tags{display:flex;flex-wrap:wrap;gap:6px}
-.tag{padding:4px 10px;background:#0f172a;border:1px solid #334155;border-radius:6px;font-size:11px;color:#64748b;font-weight:600}
-/* Footer */
-.footer{text-align:center;margin-top:24px;font-size:12px;color:#475569}
-.footer a{color:#6366f1;text-decoration:none}
-@media(max-width:500px){.body{padding:20px}.header{padding:28px 20px}.header h1{font-size:24px}.fmt-grid{grid-template-columns:repeat(3,1fr)}}
+.r-success{background:var(--pastel-green);border:1px solid rgba(0,0,0,0.04);border-radius:var(--radius);padding:28px}
+.r-success .r-icon{font-size:14px;font-weight:700;color:var(--pastel-green-t);background:var(--surface);width:44px;height:44px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px;box-shadow:var(--shadow-sm)}
+.r-success .r-title{font-weight:700;color:var(--pastel-green-t);font-size:16px}
+.r-success .r-sub{font-size:13px;color:var(--text2);margin-top:4px}
+.dl-btn{display:inline-block;margin-top:16px;padding:11px 32px;background:var(--accent);color:white;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;transition:all .2s;cursor:pointer;border:none;font-family:var(--font-sans)}
+.dl-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
+.r-error{background:var(--pastel-rose);border:1px solid rgba(0,0,0,0.04);border-radius:var(--radius);padding:22px;color:var(--pastel-rose-t);font-size:14px}
+.reset-btn{margin-top:16px;padding:8px 24px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text2);font-size:13px;cursor:pointer;transition:all .2s;font-family:var(--font-sans)}
+.reset-btn:hover{border-color:var(--accent);color:var(--text)}
+
+/* ===== Merge list ===== */
+.merge-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;transition:all .15s}
+.merge-item:hover{border-color:rgba(0,0,0,0.12)}
+.merge-idx{font-size:11px;font-weight:700;color:var(--text3);width:24px;text-align:center;flex-shrink:0}
+.merge-name{flex:1;font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.merge-size{font-size:11px;color:var(--text3);flex-shrink:0}
+.merge-rm{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:4px;border-radius:6px;transition:all .15s;flex-shrink:0}
+.merge-rm:hover{background:var(--pastel-rose);color:var(--pastel-rose-t)}
+
+/* ===== Img preview ===== */
+.img-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.img-thumb{position:relative;width:72px;height:72px;border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+.img-thumb img{width:100%;height:100%;object-fit:cover}
+.img-thumb button{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.55);border:none;color:white;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:10px;line-height:18px;text-align:center;backdrop-filter:blur(4px)}
+
+/* ===== Footer ===== */
+.footer{text-align:center;margin-top:40px;padding-top:24px;border-top:1px solid var(--border)}
+.footer p{font-size:12px;color:var(--text3);line-height:1.8}
+.footer a{color:var(--text2);text-decoration:none;font-weight:500}
+.footer a:hover{color:var(--text)}
+
+/* ===== Supported tags ===== */
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:20px;justify-content:center}
+.tag{padding:5px 12px;background:var(--bg);border:1px solid var(--border);border-radius:999px;font-size:11px;color:var(--text2);font-weight:500;letter-spacing:0.01em}
+
+/* ===== Animations ===== */
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.animate-in{animation:fadeUp .4s ease-out both}
+
+/* ===== Responsive ===== */
+@media(max-width:520px){
+  .page{padding:32px 16px 60px}
+  .hero h1{font-size:32px}
+  .card-body{padding:20px}
+  .fmt-grid{grid-template-columns:repeat(3,1fr)}
+  .dropzone{padding:36px 16px}
+  .tabs{gap:0}
+  .tab{font-size:12px;padding:12px 4px}
+}
 </style>
 </head>
 <body>
 
-<div class="top-bar">
-  <h2>⚡ 纯浏览器端 · 文件不上传服务器</h2>
-</div>
-
-<div class="card">
-  <div class="header">
-    <h1>万能格式转换器</h1>
-    <p>文件在你的浏览器本地完成转换，不会上传到任何服务器</p>
+<div class="page">
+  <div class="hero animate-in">
+    <div class="hero-label">Browser-native &middot; No Upload</div>
+    <h1>linjiade<span>'s</span> 转换器</h1>
+    <p>文件在你的浏览器本地完成转换，不会上传到任何服务器。支持 PDF、Word、图片、Markdown 等 30+ 种格式互转。</p>
   </div>
 
-  <div class="body">
-    <div class="tabs">
+  <div class="card animate-in" style="animation-delay:.1s">
+    <div class="tabs" id="tabs">
       <button class="tab active" data-tab="convert">格式转换</button>
       <button class="tab" data-tab="merge">PDF 合并</button>
       <button class="tab" data-tab="img-merge">图片合并 PDF</button>
     </div>
 
-    <!-- ===== 格式转换 ===== -->
-    <div id="panel-convert">
-      <div class="dropzone" id="dropzone">
-        <span class="icon">📁</span>
-        <div class="text">拖拽文件到这里，或 <strong>点击选择</strong></div>
-        <div class="hint">支持图片 · Markdown · HTML · 文本 · Excel/CSV</div>
-        <input type="file" id="fileInput">
-      </div>
-
-      <div class="file-info" id="fileInfo">
-        <div class="file-icon" id="fIcon">📄</div>
-        <div class="file-details">
-          <div class="file-name" id="fName"></div>
-          <div class="file-size" id="fSize"></div>
+    <div class="card-body">
+      <!-- ===== 格式转换 ===== -->
+      <div id="panel-convert">
+        <div class="dropzone" id="dropzone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <div class="dz-title">拖拽文件到此处，或点击选择</div>
+          <div class="dz-sub">PDF &middot; Word &middot; PPT &middot; Excel &middot; 图片 &middot; Markdown &middot; HTML &middot; CSV</div>
+          <input type="file" id="fileInput">
         </div>
-        <button class="remove-btn" id="removeBtn">✕</button>
+
+        <div class="file-info" id="fileInfo">
+          <div class="fi-icon" id="fIcon"></div>
+          <div class="fi-details">
+            <div class="fi-name" id="fName"></div>
+            <div class="fi-size" id="fSize"></div>
+          </div>
+          <button class="fi-remove" id="removeBtn" title="移除">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="fmt-section" id="fmtSection">
+          <label>转换为</label>
+          <div class="fmt-grid" id="fmtGrid"></div>
+        </div>
+
+        <button class="convert-btn" id="convertBtn">开始转换</button>
+
+        <div class="progress" id="progress">
+          <div class="bar-track"><div class="bar indeterminate" id="bar"></div></div>
+          <div class="progress-label" id="progressText">正在转换...</div>
+        </div>
+
+        <div class="result" id="result"></div>
       </div>
 
-      <div class="fmt-section" id="fmtSection">
-        <label>转换为：</label>
-        <div class="fmt-grid" id="fmtGrid"></div>
+      <!-- ===== PDF 合并 ===== -->
+      <div id="panel-merge" style="display:none">
+        <div class="dropzone" id="dropMerge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M8 3v18"/><path d="M16 3v18"/></svg>
+          <div class="dz-title">选择多个 PDF 文件</div>
+          <div class="dz-sub">按选择顺序合并为一个文件</div>
+          <input type="file" id="mergeInput" accept=".pdf" multiple>
+        </div>
+        <div id="mergeList" style="margin-top:14px"></div>
+        <button class="convert-btn" id="mergeBtn" style="display:none">合并 PDF</button>
+        <div class="progress" id="mergeProgress"><div class="bar-track"><div class="bar indeterminate"></div></div><div class="progress-label">正在合并...</div></div>
+        <div class="result" id="mergeResult"></div>
       </div>
 
-      <button class="convert-btn" id="convertBtn">✨ 开始转换</button>
-
-      <div class="progress" id="progress">
-        <div class="bar-bg"><div class="bar indeterminate" id="bar"></div></div>
-        <div class="progress-text" id="progressText">正在转换...</div>
-      </div>
-
-      <div class="result" id="result"></div>
-    </div>
-
-    <!-- ===== PDF 合并 ===== -->
-    <div id="panel-merge" style="display:none">
-      <div class="dropzone" id="dropMerge">
-        <span class="icon">📚</span>
-        <div class="text">选择多个 PDF 文件，合并为一个</div>
-        <div class="hint">按选择顺序合并</div>
-        <input type="file" id="mergeInput" accept=".pdf" multiple>
-      </div>
-      <div id="mergeList" style="margin-top:14px"></div>
-      <button class="convert-btn" id="mergeBtn" style="display:none">🔗 合并 PDF</button>
-      <div class="progress" id="mergeProgress"><div class="bar-bg"><div class="bar indeterminate"></div></div><div class="progress-text">正在合并...</div></div>
-      <div class="result" id="mergeResult"></div>
-    </div>
-
-    <!-- ===== 图片合并 PDF ===== -->
-    <div id="panel-img-merge" style="display:none">
-      <div class="dropzone" id="dropImg">
-        <span class="icon">🖼️</span>
-        <div class="text">选择多张图片，合并为 PDF</div>
-        <div class="hint">支持 PNG / JPG / WebP / BMP</div>
-        <input type="file" id="imgInput" accept="image/*" multiple>
-      </div>
-      <div id="imgList" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px"></div>
-      <button class="convert-btn" id="imgMergeBtn" style="display:none">📄 生成 PDF</button>
-      <div class="progress" id="imgProgress"><div class="bar-bg"><div class="bar indeterminate"></div></div><div class="progress-text">正在生成...</div></div>
-      <div class="result" id="imgResult"></div>
-    </div>
-
-    <!-- 支持的格式 -->
-    <div class="supported">
-      <h3>浏览器端支持</h3>
-      <div class="tags">
-        <span class="tag">MD → HTML/PDF</span>
-        <span class="tag">HTML → PDF</span>
-        <span class="tag">图片互转</span>
-        <span class="tag">图片 → PDF</span>
-        <span class="tag">文本 → PDF/DOCX</span>
-        <span class="tag">Excel ↔ CSV</span>
-        <span class="tag">图片合并PDF</span>
-        <span class="tag">PDF合并</span>
+      <!-- ===== 图片合并 PDF ===== -->
+      <div id="panel-img-merge" style="display:none">
+        <div class="dropzone" id="dropImg">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          <div class="dz-title">选择多张图片，合并为 PDF</div>
+          <div class="dz-sub">支持 PNG / JPG / WebP / BMP / GIF</div>
+          <input type="file" id="imgInput" accept="image/*" multiple>
+        </div>
+        <div class="img-grid" id="imgList"></div>
+        <button class="convert-btn" id="imgMergeBtn" style="display:none">生成 PDF</button>
+        <div class="progress" id="imgProgress"><div class="bar-track"><div class="bar indeterminate"></div></div><div class="progress-label">正在生成...</div></div>
+        <div class="result" id="imgResult"></div>
       </div>
     </div>
   </div>
+
+  <!-- Tags -->
+  <div class="tags animate-in" style="animation-delay:.2s">
+    <span class="tag">PDF to Word</span>
+    <span class="tag">Word to PDF</span>
+    <span class="tag">Word to HTML</span>
+    <span class="tag">PDF to Text</span>
+    <span class="tag">Markdown to PDF</span>
+    <span class="tag">HTML to PDF</span>
+    <span class="tag">Image Convert</span>
+    <span class="tag">Image to PDF</span>
+    <span class="tag">Excel to CSV</span>
+    <span class="tag">PDF Merge</span>
+    <span class="tag">Image Merge PDF</span>
+  </div>
+
+  <div class="footer animate-in" style="animation-delay:.3s">
+    <p>All conversions happen locally in your browser.<br>Files never leave your machine.</p>
+    <p style="margin-top:8px">Built by <a href="#">linjiade</a></p>
+  </div>
 </div>
 
-<div class="footer">所有转换均在浏览器本地完成 · 文件不会离开你的电脑</div>
-
 <script>
-// ====== 工具函数 ======
-const $ = id => document.getElementById(id);
-const ext = name => name.split('.').pop().toLowerCase();
-const fmtSize = b => b<1024?b+'B':b<1048576?(b/1024).toFixed(1)+'KB':(b/1048576).toFixed(1)+'MB';
+// ====== Utils ======
+const $=id=>document.getElementById(id);
+const ext=n=>n.split('.').pop().toLowerCase();
+const fmtSize=b=>b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';
 
-const ICONS = {pdf:'📕',docx:'📘',doc:'📘',pptx:'📙',xlsx:'📗',xls:'📗',csv:'📗',txt:'📝',html:'🌐',htm:'🌐',md:'📋',png:'🖼️',jpg:'🖼️',jpeg:'🖼️',gif:'🖼️',bmp:'🖼️',webp:'🖼️',tiff:'🖼️',svg:'🖼️'};
+const EXT_CLASS={pdf:'pdf',doc:'doc',docx:'doc',ppt:'ppt',pptx:'ppt',xls:'xls',xlsx:'xls',csv:'xls',txt:'txt',html:'web',htm:'web',md:'txt',png:'img',jpg:'img',jpeg:'img',gif:'img',bmp:'img',webp:'img',svg:'img',tiff:'img'};
+const EXT_LABEL={pdf:'PDF',docx:'DOCX',doc:'DOC',pptx:'PPTX',ppt:'PPT',xlsx:'XLSX',xls:'XLS',csv:'CSV',txt:'TXT',html:'HTML',htm:'HTM',md:'MD',png:'PNG',jpg:'JPG',jpeg:'JPG',gif:'GIF',bmp:'BMP',webp:'WEBP',svg:'SVG',tiff:'TIFF'};
 
-// 转换路由
-const ROUTES = {
-  md:      [{f:'html',n:'HTML'},{f:'pdf',n:'PDF'}],
-  html:    [{f:'pdf',n:'PDF'},{f:'txt',n:'TXT'},{f:'md',n:'Markdown'}],
-  htm:     [{f:'pdf',n:'PDF'},{f:'txt',n:'TXT'}],
-  txt:     [{f:'pdf',n:'PDF'},{f:'docx',n:'Word'}],
-  png:     [{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'bmp',n:'BMP'},{f:'ico',n:'ICO'},{f:'pdf',n:'PDF'}],
-  jpg:     [{f:'png',n:'PNG'},{f:'webp',n:'WebP'},{f:'bmp',n:'BMP'},{f:'ico',n:'ICO'},{f:'pdf',n:'PDF'}],
-  jpeg:    [{f:'png',n:'PNG'},{f:'webp',n:'WebP'},{f:'bmp',n:'BMP'},{f:'ico',n:'ICO'},{f:'pdf',n:'PDF'}],
-  webp:    [{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'bmp',n:'BMP'},{f:'pdf',n:'PDF'}],
-  bmp:     [{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'pdf',n:'PDF'}],
-  gif:     [{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'pdf',n:'PDF'}],
-  svg:     [{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'pdf',n:'PDF'}],
-  xlsx:    [{f:'csv',n:'CSV'},{f:'html',n:'HTML'}],
-  xls:     [{f:'csv',n:'CSV'},{f:'xlsx',n:'XLSX'}],
-  csv:     [{f:'xlsx',n:'Excel'},{f:'txt',n:'TXT'},{f:'html',n:'HTML'}],
+// Conversion routes
+const ROUTES={
+  pdf:[{f:'docx',n:'Word'},{f:'txt',n:'TXT'},{f:'html',n:'HTML'}],
+  docx:[{f:'pdf',n:'PDF'},{f:'html',n:'HTML'},{f:'txt',n:'TXT'}],
+  doc:[{f:'pdf',n:'PDF'},{f:'html',n:'HTML'},{f:'txt',n:'TXT'}],
+  pptx:[{f:'pdf',n:'PDF'},{f:'png',n:'PNG'}],
+  xlsx:[{f:'csv',n:'CSV'},{f:'html',n:'HTML'}],
+  xls:[{f:'csv',n:'CSV'},{f:'xlsx',n:'XLSX'}],
+  csv:[{f:'xlsx',n:'Excel'},{f:'txt',n:'TXT'},{f:'html',n:'HTML'}],
+  txt:[{f:'pdf',n:'PDF'},{f:'docx',n:'Word'}],
+  md:[{f:'html',n:'HTML'},{f:'pdf',n:'PDF'},{f:'docx',n:'Word'}],
+  html:[{f:'pdf',n:'PDF'},{f:'txt',n:'TXT'},{f:'md',n:'Markdown'},{f:'docx',n:'Word'}],
+  htm:[{f:'pdf',n:'PDF'},{f:'txt',n:'TXT'}],
+  png:[{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'bmp',n:'BMP'},{f:'ico',n:'ICO'},{f:'pdf',n:'PDF'}],
+  jpg:[{f:'png',n:'PNG'},{f:'webp',n:'WebP'},{f:'bmp',n:'BMP'},{f:'ico',n:'ICO'},{f:'pdf',n:'PDF'}],
+  jpeg:[{f:'png',n:'PNG'},{f:'webp',n:'WebP'},{f:'bmp',n:'BMP'},{f:'ico',n:'ICO'},{f:'pdf',n:'PDF'}],
+  webp:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'bmp',n:'BMP'},{f:'pdf',n:'PDF'}],
+  bmp:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'pdf',n:'PDF'}],
+  gif:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'pdf',n:'PDF'}],
+  svg:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'pdf',n:'PDF'}],
 };
 
-// ====== 标签页切换 ======
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+// ====== Tabs ======
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
     tab.classList.add('active');
-    ['convert','merge','img-merge'].forEach(id => {
-      $('panel-'+id).style.display = id===tab.dataset.tab ? 'block' : 'none';
+    ['convert','merge','img-merge'].forEach(id=>{
+      $('panel-'+id).style.display=id===tab.dataset.tab?'block':'none';
     });
   });
 });
 
-// ====== 格式转换 ======
-let selFile = null, selTarget = null;
+// ====== Format Conversion ======
+let selFile=null,selTarget=null;
 
-function resetConvert() {
-  selFile = null; selTarget = null;
-  fileInfo.classList.remove('show'); fmtSection.classList.remove('show');
-  convertBtn.classList.remove('show'); progress.classList.remove('show');
-  result.classList.remove('show'); result.innerHTML=''; fmtGrid.innerHTML='';
-  fileInput.value='';
+function resetConvert(){
+  selFile=null;selTarget=null;
+  $('fileInfo').classList.remove('show');$('fmtSection').classList.remove('show');
+  $('convertBtn').classList.remove('show');$('progress').classList.remove('show');
+  $('result').classList.remove('show');$('result').innerHTML='';$('fmtGrid').innerHTML='';
+  $('fileInput').value='';
+  $('bar').style.background='';
 }
 
-['dragenter','dragover'].forEach(e => dropzone.addEventListener(e, ev => { ev.preventDefault(); dropzone.classList.add('dragover'); }));
-['dragleave','drop'].forEach(e => dropzone.addEventListener(e, ev => { ev.preventDefault(); dropzone.classList.remove('dragover'); }));
-dropzone.addEventListener('drop', ev => { if(ev.dataTransfer.files.length) handleFile(ev.dataTransfer.files[0]); });
-fileInput.addEventListener('change', () => { if(fileInput.files.length) handleFile(fileInput.files[0]); });
-removeBtn.addEventListener('click', resetConvert);
+['dragenter','dragover'].forEach(e=>$('dropzone').addEventListener(e,ev=>{ev.preventDefault();$('dropzone').classList.add('dragover')}));
+['dragleave','drop'].forEach(e=>$('dropzone').addEventListener(e,ev=>{ev.preventDefault();$('dropzone').classList.remove('dragover')}));
+$('dropzone').addEventListener('drop',ev=>{if(ev.dataTransfer.files.length)handleFile(ev.dataTransfer.files[0])});
+$('fileInput').addEventListener('change',()=>{if($('fileInput').files.length)handleFile($('fileInput').files[0])});
+$('removeBtn').addEventListener('click',resetConvert);
 
-function handleFile(file) {
-  selFile = file; selTarget = null;
-  const e = ext(file.name);
-  $('fIcon').textContent = ICONS[e] || '📄';
-  $('fName').textContent = file.name;
-  $('fSize').textContent = fmtSize(file.size);
-  fileInfo.classList.add('show');
+function handleFile(file){
+  selFile=file;selTarget=null;
+  const e=ext(file.name);
+  const icon=$('fIcon');
+  icon.className='fi-icon '+(EXT_CLASS[e]||'txt');
+  icon.textContent=EXT_LABEL[e]||e.toUpperCase();
+  $('fName').textContent=file.name;
+  $('fSize').textContent=fmtSize(file.size);
+  $('fileInfo').classList.add('show');
 
-  const routes = ROUTES[e];
-  fmtGrid.innerHTML = '';
-  if(routes && routes.length) {
-    routes.forEach(r => {
-      const btn = document.createElement('div');
-      btn.className = 'fmt-btn';
-      btn.innerHTML = `<span class="ext">.${r.f}</span><span class="name">${r.n}</span>`;
-      btn.onclick = () => { selTarget=r.f; fmtGrid.querySelectorAll('.fmt-btn').forEach(b=>b.classList.remove('selected')); btn.classList.add('selected'); convertBtn.classList.add('show'); };
-      fmtGrid.appendChild(btn);
+  const routes=ROUTES[e];
+  $('fmtGrid').innerHTML='';
+  if(routes&&routes.length){
+    routes.forEach(r=>{
+      const btn=document.createElement('div');
+      btn.className='fmt-btn';
+      btn.innerHTML=`<span class="ext">.${r.f}</span><span class="name">${r.n}</span>`;
+      btn.onclick=()=>{selTarget=r.f;$('fmtGrid').querySelectorAll('.fmt-btn').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected');$('convertBtn').classList.add('show')};
+      $('fmtGrid').appendChild(btn);
     });
-    fmtSection.classList.add('show');
-    convertBtn.classList.remove('show');
-  } else {
-    fmtGrid.innerHTML = '<p style="color:#64748b;font-size:13px">暂不支持此格式在浏览器端转换</p>';
-    fmtSection.classList.add('show');
+    $('fmtSection').classList.add('show');
+    $('convertBtn').classList.remove('show');
+  }else{
+    $('fmtGrid').innerHTML='<p style="color:var(--text3);font-size:13px">No conversion available for this format</p>';
+    $('fmtSection').classList.add('show');
   }
 }
 
-convertBtn.addEventListener('click', async () => {
-  if(!selFile||!selTarget) return;
-  convertBtn.disabled = true;
-  progress.classList.add('show');
-  bar.className = 'bar indeterminate';
-  progressText.textContent = '正在转换...';
-  result.classList.remove('show');
+$('convertBtn').addEventListener('click',async()=>{
+  if(!selFile||!selTarget)return;
+  $('convertBtn').disabled=true;
+  $('progress').classList.add('show');
+  $('bar').className='bar indeterminate';
+  $('bar').style.background='';
+  $('progressText').textContent='Converting...';
+  $('result').classList.remove('show');
 
-  try {
-    const e = ext(selFile.name);
-    const key = e+'->'+selTarget;
-    let blob, outName = selFile.name.replace(/\.[^.]+$/, '')+'.'+selTarget;
+  try{
+    const e=ext(selFile.name);
+    const key=e+'->'+selTarget;
+    let blob,outName=selFile.name.replace(/\.[^.]+$/,'')+'.'+selTarget;
 
-    if(key==='md->html')        blob = await mdToHtml(selFile);
-    else if(key==='md->pdf')    blob = await mdToPdf(selFile);
-    else if(key==='html->pdf')  blob = await htmlToPdf(selFile);
-    else if(key==='htm->pdf')   blob = await htmlToPdf(selFile);
-    else if(key==='html->txt')  blob = await htmlToTxt(selFile);
-    else if(key==='htm->txt')   blob = await htmlToTxt(selFile);
-    else if(key==='html->md')   blob = await htmlToMd(selFile);
-    else if(key==='txt->pdf')   blob = await txtToPdf(selFile);
-    else if(key==='txt->docx')  blob = await txtToDocx(selFile);
-    else if(ROUTES[e]?.find(r=>r.f===selTarget) && ['png','jpg','jpeg','webp','bmp','gif','ico','pdf'].includes(selTarget)) {
-      if(selTarget==='pdf') blob = await imgToPdf(selFile);
-      else if(e==='svg') blob = await svgConvert(selFile, selTarget);
-      else blob = await imgConvert(selFile, selTarget);
-    }
-    else if(key==='xlsx->csv')  blob = await excelToCsv(selFile);
-    else if(key==='xls->csv')   blob = await excelToCsv(selFile);
-    else if(key==='xlsx->html') blob = await excelToHtml(selFile);
-    else if(key==='xls->xlsx')  blob = await excelConvert(selFile,'xlsx');
-    else if(key==='csv->xlsx')  blob = await csvToExcel(selFile);
-    else if(key==='csv->txt')   blob = await csvToTxt(selFile);
-    else if(key==='csv->html')  blob = await csvToHtml(selFile);
-    else throw new Error('暂不支持此转换');
+    // PDF conversions
+    if(key==='pdf->txt') blob=await pdfToText(selFile);
+    else if(key==='pdf->docx') blob=await pdfToWord(selFile);
+    else if(key==='pdf->html') blob=await pdfToHtml(selFile);
+    // Word conversions
+    else if(key==='docx->pdf'||key==='doc->pdf') blob=await wordToPdf(selFile);
+    else if(key==='docx->html'||key==='doc->html') blob=await wordToHtml(selFile);
+    else if(key==='docx->txt'||key==='doc->txt') blob=await wordToText(selFile);
+    // PPT conversions
+    else if(key==='pptx->pdf') blob=await pptToPdf(selFile);
+    else if(key==='pptx->png') blob=await pptToPng(selFile);
+    // Markdown
+    else if(key==='md->html') blob=await mdToHtml(selFile);
+    else if(key==='md->pdf') blob=await mdToPdf(selFile);
+    else if(key==='md->docx') blob=await mdToWord(selFile);
+    // HTML
+    else if(key==='html->pdf'||key==='htm->pdf') blob=await htmlToPdf(selFile);
+    else if(key==='html->txt'||key==='htm->txt') blob=await htmlToTxt(selFile);
+    else if(key==='html->md') blob=await htmlToMd(selFile);
+    else if(key==='html->docx') blob=await htmlToWord(selFile);
+    // Text
+    else if(key==='txt->pdf') blob=await txtToPdf(selFile);
+    else if(key==='txt->docx') blob=await txtToDocx(selFile);
+    // Images
+    else if(e==='svg'&&selTarget==='pdf') blob=await svgToPdf(selFile);
+    else if(e==='svg') blob=await svgConvert(selFile,selTarget);
+    else if(selTarget==='pdf') blob=await imgToPdf(selFile);
+    else if(['png','jpg','jpeg','webp','bmp','gif','ico'].includes(selTarget)) blob=await imgConvert(selFile,selTarget);
+    // Excel/CSV
+    else if(key==='xlsx->csv'||key==='xls->csv') blob=await excelToCsv(selFile);
+    else if(key==='xlsx->html') blob=await excelToHtml(selFile);
+    else if(key==='xls->xlsx') blob=await excelConvert(selFile,'xlsx');
+    else if(key==='csv->xlsx') blob=await csvToExcel(selFile);
+    else if(key==='csv->txt') blob=await csvToTxt(selFile);
+    else if(key==='csv->html') blob=await csvToHtml(selFile);
+    else throw new Error('Conversion not supported: '+key);
 
-    bar.className = 'bar';
-    progressText.textContent = '转换完成！';
-    showResult(blob, outName, result);
-  } catch(err) {
-    bar.className = 'bar';
-    bar.style.background = '#ef4444';
-    result.innerHTML = `<div class="error-box">❌ ${err.message}</div><button class="reset-btn" onclick="resetConvert()">重试</button>`;
-    result.classList.add('show');
-  } finally {
-    convertBtn.disabled = false;
-  }
+    $('bar').className='bar';$('bar').style.width='100%';
+    $('progressText').textContent='Done';
+    showResult(blob,outName,$('result'));
+  }catch(err){
+    $('bar').className='bar';$('bar').style.background='var(--pastel-rose-t)';
+    $('result').innerHTML=`<div class="r-error">Conversion failed: ${err.message}</div><button class="reset-btn" onclick="resetConvert()">Retry</button>`;
+    $('result').classList.add('show');
+  }finally{$('convertBtn').disabled=false}
 });
 
-function showResult(blob, name, container) {
-  const url = URL.createObjectURL(blob);
-  container.innerHTML = `
-    <div class="success-box">
-      <div class="s-icon">✅</div>
-      <div class="s-title">转换完成</div>
-      <div class="s-sub">${name}</div>
-      <a class="dl-btn" href="${url}" download="${name}">⬇ 下载文件</a>
+function showResult(blob,name,container){
+  const url=URL.createObjectURL(blob);
+  container.innerHTML=`
+    <div class="r-success">
+      <div class="r-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--pastel-green-t)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="r-title">Conversion complete</div>
+      <div class="r-sub">${name} (${fmtSize(blob.size)})</div>
+      <a class="dl-btn" href="${url}" download="${name}">Download</a>
     </div>
-    <button class="reset-btn" onclick="resetConvert()">转换其他文件</button>`;
+    <button class="reset-btn" onclick="resetConvert()">Convert another file</button>`;
   container.classList.add('show');
-  // 自动下载
-  const a = document.createElement('a'); a.href=url; a.download=name; a.click();
+  const a=document.createElement('a');a.href=url;a.download=name;a.click();
 }
 
-// ====== 转换实现 ======
-
-// 读取文件为 text
-function readText(file) { return file.text(); }
-function readFileAsArrayBuffer(file) { return file.arrayBuffer(); }
-
-// --- MD → HTML ---
-async function mdToHtml(file) {
-  const md = await readText(file);
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-body{font-family:system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 20px;line-height:1.8;color:#1e293b}
-h1,h2,h3{color:#0f172a;border-bottom:1px solid #e2e8f0;padding-bottom:6px}
-code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:.9em}
-pre{background:#f8fafc;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #e2e8f0}
-pre code{background:none;padding:0}
-table{border-collapse:collapse;width:100%}th,td{border:1px solid #e2e8f0;padding:10px 14px}
-th{background:#f1f5f9}blockquote{border-left:4px solid #6366f1;margin:0;padding:10px 20px;color:#64748b}
-img{max-width:100%}a{color:#6366f1}</style></head><body>${marked.parse(md)}</body></html>`;
-  return new Blob([html], {type:'text/html;charset=utf-8'});
+// ====== PDF via pdfjsLib (loaded as module fallback) ======
+let pdfjsLib=null;
+async function getPdfJs(){
+  if(pdfjsLib)return pdfjsLib;
+  try{
+    pdfjsLib=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.mjs');
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
+    return pdfjsLib;
+  }catch(e){
+    // fallback: load via script tag
+    return new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js';
+      s.onload=()=>{pdfjsLib=window['pdfjs-dist/build/pdf'];pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js';resolve(pdfjsLib)};
+      s.onerror=reject;
+      document.head.appendChild(s);
+    });
+  }
 }
 
-// --- MD → PDF ---
-async function mdToPdf(file) {
-  const md = await readText(file);
-  const div = document.createElement('div');
-  div.innerHTML = marked.parse(md);
-  div.style.cssText = 'font-family:system-ui,sans-serif;padding:20px;line-height:1.8;color:#1e293b;max-width:800px';
+async function readPdfPages(file){
+  const pdfj=await getPdfJs();
+  const buf=await file.arrayBuffer();
+  const doc=await pdfj.getDocument({data:buf}).promise;
+  const pages=[];
+  for(let i=1;i<=doc.numPages;i++){
+    const page=await doc.getPage(i);
+    const tc=await page.getTextContent();
+    pages.push(tc.items.map(item=>item.str).join(' '));
+  }
+  return pages;
+}
+
+// PDF -> Text
+async function pdfToText(file){
+  const pages=await readPdfPages(file);
+  return new Blob([pages.join('\n\n')],{type:'text/plain;charset=utf-8'});
+}
+
+// PDF -> Word
+async function pdfToWord(file){
+  const pages=await readPdfPages(file);
+  const {Document,Packer,Paragraph,TextRun,HeadingLevel}=docx;
+  const children=[];
+  pages.forEach((text,i)=>{
+    if(i>0) children.push(new Paragraph({children:[new TextRun({text:'',break:2})]}));
+    if(pages.length>1) children.push(new Paragraph({text:`Page ${i+1}`,heading:HeadingLevel.HEADING_2,spacing:{after:120}}));
+    const lines=text.split(/\n+/);
+    lines.forEach(line=>{
+      const t=line.trim();
+      if(t) children.push(new Paragraph({children:[new TextRun({text:t,size:22})],spacing:{after:80}}));
+    });
+  });
+  if(!children.length) children.push(new Paragraph({children:[new TextRun({text:'(empty)',size:22})]}));
+  const doc=new Document({sections:[{children}]});
+  return Packer.toBlob(doc);
+}
+
+// PDF -> HTML
+async function pdfToHtml(file){
+  const pages=await readPdfPages(file);
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const body=pages.map((t,i)=>`<section style="margin:24px auto;max-width:800px;padding:32px;background:white;border:1px solid #eee;border-radius:8px;"><pre style="white-space:pre-wrap;font-family:Georgia,serif;line-height:1.8;font-size:15px;">${esc(t)}</pre><div style="text-align:center;color:#bbb;font-size:12px;margin-top:16px">Page ${i+1}</div></section>`).join('\n');
+  return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{background:#f8f8f7;margin:0;padding:20px}</style></head><body>${body}</body></html>`],{type:'text/html;charset=utf-8'});
+}
+
+// Word -> HTML (via mammoth)
+async function wordToHtml(file){
+  const buf=await file.arrayBuffer();
+  const result=await mammoth.convertToHtml({arrayBuffer:buf});
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.8;color:#1a1a1a}
+h1,h2,h3{font-family:'Playfair Display',Georgia,serif;letter-spacing:-0.02em}
+table{border-collapse:collapse;width:100%;margin:20px 0}th,td{border:1px solid #eaeaea;padding:10px 14px;text-align:left}
+th{background:#f8f8f7;font-weight:600}code{background:#f4f4f2;padding:2px 6px;border-radius:4px;font-size:.9em}
+img{max-width:100%}</style></head><body>${result.value}</body></html>`;
+  return new Blob([html],{type:'text/html;charset=utf-8'});
+}
+
+// Word -> Text (via mammoth)
+async function wordToText(file){
+  const buf=await file.arrayBuffer();
+  const result=await mammoth.extractRawText({arrayBuffer:buf});
+  return new Blob([result.value],{type:'text/plain;charset=utf-8'});
+}
+
+// Word -> PDF (via mammoth -> HTML -> PDF)
+async function wordToPdf(file){
+  const buf=await file.arrayBuffer();
+  const result=await mammoth.convertToHtml({arrayBuffer:buf});
+  const div=document.createElement('div');
+  div.innerHTML=result.value;
+  div.style.cssText='font-family:"Plus Jakarta Sans",system-ui,sans-serif;padding:24px;line-height:1.8;color:#1a1a1a;max-width:800px';
   document.body.appendChild(div);
-  try {
-    const opt = {margin:[10,10,10,10], filename:'output.pdf', html2canvas:{scale:2}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}};
-    return await html2pdf().set(opt).from(div).outputPdf('blob');
-  } finally { document.body.removeChild(div); }
+  try{
+    return await html2pdf().set({margin:[12,12,12,12],filename:'output.pdf',html2canvas:{scale:2},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}}).from(div).outputPdf('blob');
+  }finally{document.body.removeChild(div)}
 }
 
-// --- HTML → PDF ---
-async function htmlToPdf(file) {
-  const html = await readText(file);
-  const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;left:-9999px;width:800px;height:600px';
+// PPT -> PDF (basic text extraction)
+async function pptToPdf(file){
+  const buf=await file.arrayBuffer();
+  const zip=await JSZip.loadAsync(buf);
+  // Try to extract slide XMLs
+  const slides=[];
+  const files=Object.keys(zip.files).filter(f=>f.match(/ppt\/slides\/slide\d+\.xml/)).sort();
+  for(const f of files){
+    const xml=await zip.files[f].async('string');
+    const texts=[...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map(m=>m[1]).filter(t=>t.trim());
+    slides.push(texts.join(' '));
+  }
+  if(!slides.length) throw new Error('Cannot read PPT content');
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  slides.forEach((text,i)=>{
+    if(i>0) doc.addPage();
+    doc.setFontSize(10);
+    const lines=doc.splitTextToSize(text,180);
+    doc.text(`Slide ${i+1}`,15,15);
+    doc.setFontSize(11);
+    let y=25;
+    lines.forEach(line=>{if(y>277){doc.addPage();y=20}doc.text(line,15,y);y+=6});
+  });
+  return doc.output('blob');
+}
+
+// PPT -> PNG (simplified)
+async function pptToPng(file){
+  const buf=await file.arrayBuffer();
+  const zip=await JSZip.loadAsync(buf);
+  const slides=[];
+  const files=Object.keys(zip.files).filter(f=>f.match(/ppt\/slides\/slide\d+\.xml/)).sort();
+  for(const f of files){
+    const xml=await zip.files[f].async('string');
+    const texts=[...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map(m=>m[1]).filter(t=>t.trim());
+    slides.push(texts);
+  }
+  if(!slides.length) throw new Error('Cannot read PPT content');
+  const canvas=document.createElement('canvas');
+  canvas.width=1920;canvas.height=1080;
+  const ctx=canvas.getContext('2d');
+  const texts=slides[0]||[];
+  ctx.fillStyle='white';ctx.fillRect(0,0,1920,1080);
+  ctx.fillStyle='#1a1a1a';ctx.font='28px "Microsoft YaHei",sans-serif';
+  let y=100;
+  texts.forEach(t=>{if(y<1000){ctx.fillText(t,100,y);y+=42}});
+  return new Promise(r=>canvas.toBlob(r,'image/png'));
+}
+
+// ====== Conversion implementations ======
+function readText(f){return f.text()}
+function readAB(f){return f.arrayBuffer()}
+
+async function mdToHtml(file){
+  const md=await readText(file);
+  return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.8;color:#1a1a1a}
+h1,h2,h3{font-family:'Playfair Display',Georgia,serif;letter-spacing:-0.02em;border-bottom:1px solid #eaeaea;padding-bottom:6px}
+code{background:#f4f4f2;padding:2px 6px;border-radius:4px;font-size:.9em}
+pre{background:#f8f8f7;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #eaeaea}
+pre code{background:none;padding:0}table{border-collapse:collapse;width:100%}
+th,td{border:1px solid #eaeaea;padding:10px 14px}th{background:#f8f8f7}
+blockquote{border-left:3px solid #d4d4d4;margin:0;padding:10px 20px;color:#6b6b6b}
+a{color:#1a1a1a}img{max-width:100%}</style></head><body>${marked.parse(md)}</body></html>`],{type:'text/html;charset=utf-8'});
+}
+
+async function mdToPdf(file){
+  const md=await readText(file);
+  const div=document.createElement('div');
+  div.innerHTML=marked.parse(md);
+  div.style.cssText='font-family:"Plus Jakarta Sans",system-ui,sans-serif;padding:20px;line-height:1.8;color:#1a1a1a;max-width:800px';
+  document.body.appendChild(div);
+  try{return await html2pdf().set({margin:[10,10,10,10],filename:'output.pdf',html2canvas:{scale:2},jsPDF:{unit:'mm',format:'a4'}}).from(div).outputPdf('blob')}
+  finally{document.body.removeChild(div)}
+}
+
+async function mdToWord(file){
+  const md=await readText(file);
+  const div=document.createElement('div');
+  div.innerHTML=marked.parse(md);
+  const {Document,Packer,Paragraph,TextRun,HeadingLevel}=docx;
+  const children=[];
+  div.querySelectorAll('h1,h2,h3,h4,p,li,pre,blockquote').forEach(el=>{
+    const text=el.textContent.trim();
+    if(!text)return;
+    let heading;
+    if(el.tagName==='H1')heading=HeadingLevel.HEADING_1;
+    else if(el.tagName==='H2')heading=HeadingLevel.HEADING_2;
+    else if(el.tagName==='H3')heading=HeadingLevel.HEADING_3;
+    if(heading)children.push(new Paragraph({text,heading,spacing:{after:120}}));
+    else if(el.tagName==='PRE')children.push(new Paragraph({children:[new TextRun({text,font:'Consolas',size:20})],spacing:{after:80}}));
+    else children.push(new Paragraph({children:[new TextRun({text,size:22})],spacing:{after:80}}));
+  });
+  if(!children.length)children.push(new Paragraph({text:md}));
+  const doc=new Document({sections:[{children}]});
+  return Packer.toBlob(doc);
+}
+
+async function htmlToPdf(file){
+  const html=await readText(file);
+  const iframe=document.createElement('iframe');
+  iframe.style.cssText='position:fixed;left:-9999px;width:800px;height:600px';
   document.body.appendChild(iframe);
-  iframe.srcdoc = html;
-  await new Promise(r => iframe.onload = r);
-  await new Promise(r => setTimeout(r, 500));
-  try {
-    const opt = {margin:[10,10,10,10], filename:'output.pdf', html2canvas:{scale:2}, jsPDF:{unit:'mm',format:'a4'}};
-    return await html2pdf().set(opt).from(iframe.contentDocument.body).outputPdf('blob');
-  } finally { document.body.removeChild(iframe); }
+  iframe.srcdoc=html;
+  await new Promise(r=>iframe.onload=r);
+  await new Promise(r=>setTimeout(r,500));
+  try{return await html2pdf().set({margin:[10,10,10,10],filename:'output.pdf',html2canvas:{scale:2},jsPDF:{unit:'mm',format:'a4'}}).from(iframe.contentDocument.body).outputPdf('blob')}
+  finally{document.body.removeChild(iframe)}
 }
 
-// --- HTML → TXT ---
-async function htmlToTxt(file) {
-  const html = await readText(file);
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  const txt = div.textContent || div.innerText || '';
-  return new Blob([txt], {type:'text/plain;charset=utf-8'});
+async function htmlToTxt(file){
+  const html=await readText(file);
+  const div=document.createElement('div');div.innerHTML=html;
+  return new Blob([div.textContent||''],{type:'text/plain;charset=utf-8'});
 }
 
-// --- HTML → MD ---
-async function htmlToMd(file) {
-  const html = await readText(file);
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  let md = '';
-  function walk(node) {
-    if(node.nodeType===3) { md += node.textContent; return; }
-    if(node.nodeType!==1) return;
-    const tag = node.tagName.toLowerCase();
-    if(tag==='h1') md += '# ';
-    else if(tag==='h2') md += '## ';
-    else if(tag==='h3') md += '### ';
-    else if(tag==='h4') md += '#### ';
-    else if(tag==='strong'||tag==='b') md += '**';
-    else if(tag==='em'||tag==='i') md += '*';
-    else if(tag==='li') md += '- ';
-    else if(tag==='br') { md += '\n'; return; }
-    else if(tag==='p'||tag==='div') md += '\n';
-    node.childNodes.forEach(walk);
-    if(['h1','h2','h3','h4','p','div','li','blockquote'].includes(tag)) md += '\n';
-    if(tag==='strong'||tag==='b') md += '**';
-    if(tag==='em'||tag==='i') md += '*';
+async function htmlToMd(file){
+  const html=await readText(file);
+  const div=document.createElement('div');div.innerHTML=html;
+  let md='';
+  function walk(n){
+    if(n.nodeType===3){md+=n.textContent;return}
+    if(n.nodeType!==1)return;
+    const t=n.tagName.toLowerCase();
+    if(t==='h1')md+='# ';else if(t==='h2')md+='## ';else if(t==='h3')md+='### ';
+    else if(t==='strong'||t==='b')md+='**';else if(t==='em'||t==='i')md+='*';
+    else if(t==='li')md+='- ';else if(t==='br'){md+='\n';return}
+    else if(t==='p'||t==='div')md+='\n';
+    n.childNodes.forEach(walk);
+    if(['h1','h2','h3','h4','p','div','li','blockquote'].includes(t))md+='\n';
+    if(t==='strong'||t==='b')md+='**';if(t==='em'||t==='i')md+='*';
   }
   walk(div);
-  md = md.replace(/\n{3,}/g, '\n\n').trim();
-  return new Blob([md], {type:'text/markdown;charset=utf-8'});
+  return new Blob([md.replace(/\n{3,}/g,'\n\n').trim()],{type:'text/markdown;charset=utf-8'});
 }
 
-// --- TXT → PDF ---
-async function txtToPdf(file) {
-  const text = await readText(file);
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({unit:'mm', format:'a4'});
-  const lines = doc.splitTextToSize(text, 180);
-  doc.setFontSize(11);
-  let y = 20;
-  lines.forEach(line => {
-    if(y > 277) { doc.addPage(); y = 20; }
-    doc.text(line, 15, y);
-    y += 6;
+async function htmlToWord(file){
+  const html=await readText(file);
+  const div=document.createElement('div');div.innerHTML=html;
+  const {Document,Packer,Paragraph,TextRun,HeadingLevel}=docx;
+  const children=[];
+  div.querySelectorAll('h1,h2,h3,h4,p,li,td,th').forEach(el=>{
+    const text=el.textContent.trim();if(!text)return;
+    let heading;
+    if(el.tagName==='H1')heading=HeadingLevel.HEADING_1;
+    else if(el.tagName==='H2')heading=HeadingLevel.HEADING_2;
+    else if(el.tagName==='H3')heading=HeadingLevel.HEADING_3;
+    if(heading)children.push(new Paragraph({text,heading}));
+    else children.push(new Paragraph({children:[new TextRun({text,size:22})]}));
   });
+  if(!children.length)children.push(new Paragraph({text:div.textContent||''}));
+  const doc=new Document({sections:[{children}]});
+  return Packer.toBlob(doc);
+}
+
+async function txtToPdf(file){
+  const text=await readText(file);
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const lines=doc.splitTextToSize(text,180);
+  doc.setFontSize(11);let y=20;
+  lines.forEach(l=>{if(y>277){doc.addPage();y=20}doc.text(l,15,y);y+=6});
   return doc.output('blob');
 }
 
-// --- TXT → DOCX ---
-async function txtToDocx(file) {
-  const text = await readText(file);
-  const { Document, Packer, Paragraph, TextRun } = docx;
-  const paragraphs = text.split('\n').map(line =>
-    new Paragraph({ children: [new TextRun({ text: line, size: 22 })] })
-  );
-  const doc = new Document({ sections: [{ children: paragraphs }] });
-  const blob = await Packer.toBlob(doc);
-  return blob;
+async function txtToDocx(file){
+  const text=await readText(file);
+  const {Document,Packer,Paragraph,TextRun}=docx;
+  const doc=new Document({sections:[{children:text.split('\n').map(l=>new Paragraph({children:[new TextRun({text:l,size:22})]}))}]});
+  return Packer.toBlob(doc);
 }
 
-// --- 图片格式转换 ---
-async function imgConvert(file, targetFmt) {
-  const img = await loadImage(file);
-  const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext('2d');
-  // JPG/BMP 不支持透明
-  if(['jpg','jpeg','bmp'].includes(targetFmt)) {
-    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0,0,canvas.width,canvas.height);
-  }
-  ctx.drawImage(img, 0, 0);
-  const mimeMap = {png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',bmp:'image/bmp',ico:'image/x-icon'};
-  const quality = targetFmt==='webp'?0.92:0.95;
-  return new Promise(r => canvas.toBlob(r, mimeMap[targetFmt]||'image/png', quality));
+async function imgConvert(file,targetFmt){
+  const img=await loadImage(file);
+  const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;
+  const ctx=c.getContext('2d');
+  if(['jpg','jpeg','bmp'].includes(targetFmt)){ctx.fillStyle='#FFF';ctx.fillRect(0,0,c.width,c.height)}
+  ctx.drawImage(img,0,0);
+  const mime={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',bmp:'image/bmp',ico:'image/x-icon'};
+  return new Promise(r=>c.toBlob(r,mime[targetFmt]||'image/png',targetFmt==='webp'?0.92:0.95));
 }
 
-async function svgConvert(file, targetFmt) {
-  const svgText = await readText(file);
-  const blob = new Blob([svgText], {type:'image/svg+xml'});
-  const img = await loadImage(blob);
-  const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth || 800; canvas.height = img.naturalHeight || 600;
-  canvas.getContext('2d').drawImage(img, 0, 0);
-  const mimeMap = {png:'image/png',jpg:'image/jpeg',pdf:null};
-  if(targetFmt==='pdf') return imgToPdfFromCanvas(canvas);
-  return new Promise(r => canvas.toBlob(r, mimeMap[targetFmt]||'image/png', 0.95));
+async function svgConvert(file,targetFmt){
+  const svg=await readText(file);
+  const b=new Blob([svg],{type:'image/svg+xml'});
+  const img=await loadImage(b);
+  const c=document.createElement('canvas');c.width=img.naturalWidth||800;c.height=img.naturalHeight||600;
+  c.getContext('2d').drawImage(img,0,0);
+  if(targetFmt==='pdf')return canvasToPdf(c);
+  return new Promise(r=>c.toBlob(r,{png:'image/png',jpg:'image/jpeg'}[targetFmt]||'image/png',0.95));
 }
 
-function loadImage(blobOrFile) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = URL.createObjectURL(blobOrFile);
-  });
-}
+async function svgToPdf(file){return svgConvert(file,'pdf')}
 
-// --- 图片 → PDF ---
-async function imgToPdf(file) {
-  const img = await loadImage(file);
-  const { jsPDF } = window.jspdf;
-  const w = img.naturalWidth, h = img.naturalHeight;
-  const orientation = w > h ? 'landscape' : 'portrait';
-  const doc = new jsPDF({unit:'px', format:[w, h], orientation});
-  const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
-  canvas.getContext('2d').drawImage(img, 0, 0);
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-  doc.addImage(dataUrl, 'JPEG', 0, 0, w, h);
+function loadImage(b){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(b)})}
+
+async function imgToPdf(file){
+  const img=await loadImage(file);
+  const {jsPDF}=window.jspdf;
+  const w=img.naturalWidth,h=img.naturalHeight;
+  const doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});
+  const c=document.createElement('canvas');c.width=w;c.height=h;
+  c.getContext('2d').drawImage(img,0,0);
+  doc.addImage(c.toDataURL('image/jpeg',0.95),'JPEG',0,0,w,h);
   return doc.output('blob');
 }
 
-function imgToPdfFromCanvas(canvas) {
-  const { jsPDF } = window.jspdf;
-  const w = canvas.width, h = canvas.height;
-  const doc = new jsPDF({unit:'px', format:[w, h], orientation: w>h?'landscape':'portrait'});
-  doc.addImage(canvas.toDataURL('image/jpeg',0.95), 'JPEG', 0, 0, w, h);
+function canvasToPdf(c){
+  const {jsPDF}=window.jspdf;
+  const w=c.width,h=c.height;
+  const doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});
+  doc.addImage(c.toDataURL('image/jpeg',0.95),'JPEG',0,0,w,h);
   return doc.output('blob');
 }
 
-// --- Excel/CSV ---
-async function excelToCsv(file) {
-  const data = await readFileAsArrayBuffer(file);
-  const wb = XLSX.read(data, {type:'array'});
-  const csv = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);
-  return new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
+async function excelToCsv(file){const d=await readAB(file);const wb=XLSX.read(d,{type:'array'});return new Blob(['﻿'+XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]])],{type:'text/csv;charset=utf-8'})}
+async function excelConvert(file,fmt){const d=await readAB(file);const wb=XLSX.read(d,{type:'array'});return new Blob([XLSX.write(wb,{bookType:fmt,type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
+async function excelToHtml(file){const d=await readAB(file);const wb=XLSX.read(d,{type:'array'});let h='<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #eaeaea;padding:8px}th{background:#f8f8f7}</style></head><body>';wb.SheetNames.forEach(n=>{h+=`<h3>${n}</h3>${XLSX.utils.sheet_to_html(wb.Sheets[n])}`});h+='</body></html>';return new Blob([h],{type:'text/html;charset=utf-8'})}
+async function csvToExcel(file){const t=await readText(file);const wb=XLSX.read(t,{type:'string'});return new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
+async function csvToTxt(file){return new Blob([await readText(file)],{type:'text/plain;charset=utf-8'})}
+async function csvToHtml(file){const t=await readText(file);const wb=XLSX.read(t,{type:'string'});return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #eaeaea;padding:8px}th{background:#f8f8f7}</style></head><body>${XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]])}</body></html>`],{type:'text/html;charset=utf-8'})}
+
+// ====== PDF Merge ======
+let mergeFiles=[];
+$('dropMerge').addEventListener('dragover',e=>{e.preventDefault();$('dropMerge').classList.add('dragover')});
+$('dropMerge').addEventListener('dragleave',()=>$('dropMerge').classList.remove('dragover'));
+$('dropMerge').addEventListener('drop',e=>{e.preventDefault();$('dropMerge').classList.remove('dragover');addMergeFiles(e.dataTransfer.files)});
+$('mergeInput').addEventListener('change',()=>addMergeFiles($('mergeInput').files));
+
+function addMergeFiles(files){Array.from(files).forEach(f=>{if(ext(f.name)==='pdf')mergeFiles.push(f)});renderMergeList()}
+function renderMergeList(){
+  $('mergeList').innerHTML=mergeFiles.map((f,i)=>`<div class="merge-item"><span class="merge-idx">${i+1}</span><span class="merge-name">PDF - ${f.name}</span><span class="merge-size">${fmtSize(f.size)}</span><button class="merge-rm" onclick="mergeFiles.splice(${i},1);renderMergeList()">Remove</button></div>`).join('');
+  $('mergeBtn').style.display=mergeFiles.length>=2?'block':'none';
 }
-
-async function excelConvert(file, fmt) {
-  const data = await readFileAsArrayBuffer(file);
-  const wb = XLSX.read(data, {type:'array'});
-  const out = XLSX.write(wb, {bookType:fmt, type:'array'});
-  return new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-}
-
-async function excelToHtml(file) {
-  const data = await readFileAsArrayBuffer(file);
-  const wb = XLSX.read(data, {type:'array'});
-  let html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px}th{background:#f5f5f5}</style></head><body>';
-  wb.SheetNames.forEach(name => {
-    html += `<h3>${name}</h3>${XLSX.utils.sheet_to_html(wb.Sheets[name])}`;
-  });
-  html += '</body></html>';
-  return new Blob([html], {type:'text/html;charset=utf-8'});
-}
-
-async function csvToExcel(file) {
-  const text = await readText(file);
-  const wb = XLSX.read(text, {type:'string'});
-  const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-  return new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-}
-
-async function csvToTxt(file) {
-  const text = await readText(file);
-  return new Blob([text], {type:'text/plain;charset=utf-8'});
-}
-
-async function csvToHtml(file) {
-  const text = await readText(file);
-  const wb = XLSX.read(text, {type:'string'});
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px}th{background:#f5f5f5}</style></head><body>${XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]])}</body></html>`;
-  return new Blob([html], {type:'text/html;charset=utf-8'});
-}
-
-// ====== PDF 合并 ======
-let mergeFiles = [];
-$('dropMerge').addEventListener('dragover', e => { e.preventDefault(); $('dropMerge').classList.add('dragover'); });
-$('dropMerge').addEventListener('dragleave', () => $('dropMerge').classList.remove('dragover'));
-$('dropMerge').addEventListener('drop', e => { e.preventDefault(); $('dropMerge').classList.remove('dragover'); addMergeFiles(e.dataTransfer.files); });
-$('mergeInput').addEventListener('change', () => addMergeFiles($('mergeInput').files));
-
-function addMergeFiles(files) {
-  Array.from(files).forEach(f => { if(ext(f.name)==='pdf') mergeFiles.push(f); });
-  renderMergeList();
-}
-
-function renderMergeList() {
-  $('mergeList').innerHTML = mergeFiles.map((f,i) =>
-    `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#0f172a;border:1px solid #334155;border-radius:8px;margin-bottom:6px">
-      <span style="color:#64748b;font-size:12px">#${i+1}</span>
-      <span style="flex:1;font-size:13px;color:#e2e8f0">📕 ${f.name}</span>
-      <span style="font-size:11px;color:#64748b">${fmtSize(f.size)}</span>
-      <button onclick="mergeFiles.splice(${i},1);renderMergeList()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:16px">✕</button>
-    </div>`
-  ).join('');
-  $('mergeBtn').style.display = mergeFiles.length >= 2 ? 'block' : 'none';
-}
-
-$('mergeBtn').addEventListener('click', async () => {
-  if(mergeFiles.length < 2) return;
-  $('mergeProgress').classList.add('show');
-  $('mergeBtn').disabled = true;
-  try {
-    const { PDFDocument } = PDFLib;
-    const merged = await PDFDocument.create();
-    for(const f of mergeFiles) {
-      const buf = await f.arrayBuffer();
-      const src = await PDFDocument.load(buf);
-      const pages = await merged.copyPages(src, src.getPageIndices());
-      pages.forEach(p => merged.addPage(p));
-    }
-    const bytes = await merged.save();
-    const blob = new Blob([bytes], {type:'application/pdf'});
-    showResult(blob, '合并结果.pdf', $('mergeResult'));
-  } catch(err) {
-    $('mergeResult').innerHTML = `<div class="error-box">❌ ${err.message}</div>`;
-    $('mergeResult').classList.add('show');
-  } finally {
-    $('mergeProgress').classList.remove('show');
-    $('mergeBtn').disabled = false;
-  }
+$('mergeBtn').addEventListener('click',async()=>{
+  if(mergeFiles.length<2)return;
+  $('mergeProgress').classList.add('show');$('mergeBtn').disabled=true;
+  try{
+    const{PDFDocument}=PDFLib;const merged=await PDFDocument.create();
+    for(const f of mergeFiles){const src=await PDFDocument.load(await f.arrayBuffer());const pages=await merged.copyPages(src,src.getPageIndices());pages.forEach(p=>merged.addPage(p))}
+    showResult(new Blob([await merged.save()],{type:'application/pdf'}),'merged.pdf',$('mergeResult'));
+  }catch(e){$('mergeResult').innerHTML=`<div class="r-error">${e.message}</div>`;$('mergeResult').classList.add('show')}
+  finally{$('mergeProgress').classList.remove('show');$('mergeBtn').disabled=false}
 });
 
-// ====== 图片合并 PDF ======
-let imgFiles = [];
-$('dropImg').addEventListener('dragover', e => { e.preventDefault(); $('dropImg').classList.add('dragover'); });
-$('dropImg').addEventListener('dragleave', () => $('dropImg').classList.remove('dragover'));
-$('dropImg').addEventListener('drop', e => { e.preventDefault(); $('dropImg').classList.remove('dragover'); addImgFiles(e.dataTransfer.files); });
-$('imgInput').addEventListener('change', () => addImgFiles($('imgInput').files));
+// ====== Image Merge PDF ======
+let imgFiles=[];
+$('dropImg').addEventListener('dragover',e=>{e.preventDefault();$('dropImg').classList.add('dragover')});
+$('dropImg').addEventListener('dragleave',()=>$('dropImg').classList.remove('dragover'));
+$('dropImg').addEventListener('drop',e=>{e.preventDefault();$('dropImg').classList.remove('dragover');addImgFiles(e.dataTransfer.files)});
+$('imgInput').addEventListener('change',()=>addImgFiles($('imgInput').files));
 
-function addImgFiles(files) {
-  Array.from(files).forEach(f => { if(f.type.startsWith('image/')) imgFiles.push(f); });
-  renderImgList();
+function addImgFiles(files){Array.from(files).forEach(f=>{if(f.type.startsWith('image/'))imgFiles.push(f)});renderImgList()}
+function renderImgList(){
+  $('imgList').innerHTML=imgFiles.map((f,i)=>{const u=URL.createObjectURL(f);return`<div class="img-thumb"><img src="${u}"><button onclick="imgFiles.splice(${i},1);renderImgList()">x</button></div>`}).join('');
+  $('imgMergeBtn').style.display=imgFiles.length>=1?'block':'none';
 }
-
-function renderImgList() {
-  $('imgList').innerHTML = imgFiles.map((f,i) => {
-    const url = URL.createObjectURL(f);
-    return `<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;border:1px solid #334155">
-      <img src="${url}" style="width:100%;height:100%;object-fit:cover">
-      <button onclick="imgFiles.splice(${i},1);renderImgList()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);border:none;color:white;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:10px;line-height:18px;text-align:center">✕</button>
-    </div>`;
-  }).join('');
-  $('imgMergeBtn').style.display = imgFiles.length >= 1 ? 'block' : 'none';
-}
-
-$('imgMergeBtn').addEventListener('click', async () => {
-  if(!imgFiles.length) return;
-  $('imgProgress').classList.add('show');
-  $('imgMergeBtn').disabled = true;
-  try {
-    const { jsPDF } = window.jspdf;
-    let doc = null;
-    for(const f of imgFiles) {
-      const img = await loadImage(f);
-      const w = img.naturalWidth, h = img.naturalHeight;
-      if(!doc) doc = new jsPDF({unit:'px', format:[w, h], orientation: w>h?'landscape':'portrait'});
-      else { doc.addPage([w, h], w>h?'landscape':'portrait'); }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0);
-      doc.addImage(canvas.toDataURL('image/jpeg',0.95), 'JPEG', 0, 0, w, h);
+$('imgMergeBtn').addEventListener('click',async()=>{
+  if(!imgFiles.length)return;
+  $('imgProgress').classList.add('show');$('imgMergeBtn').disabled=true;
+  try{
+    const{jsPDF}=window.jspdf;let doc=null;
+    for(const f of imgFiles){
+      const img=await loadImage(f);const w=img.naturalWidth,h=img.naturalHeight;
+      if(!doc)doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});
+      else doc.addPage([w,h],w>h?'landscape':'portrait');
+      const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);
+      doc.addImage(c.toDataURL('image/jpeg',0.95),'JPEG',0,0,w,h);
     }
-    const blob = doc.output('blob');
-    showResult(blob, '图片合并.pdf', $('imgResult'));
-  } catch(err) {
-    $('imgResult').innerHTML = `<div class="error-box">❌ ${err.message}</div>`;
-    $('imgResult').classList.add('show');
-  } finally {
-    $('imgProgress').classList.remove('show');
-    $('imgMergeBtn').disabled = false;
-  }
+    showResult(doc.output('blob'),'images.pdf',$('imgResult'));
+  }catch(e){$('imgResult').innerHTML=`<div class="r-error">${e.message}</div>`;$('imgResult').classList.add('show')}
+  finally{$('imgProgress').classList.remove('show');$('imgMergeBtn').disabled=false}
 });
 </script>
-
 </body>
 </html>
