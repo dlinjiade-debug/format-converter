@@ -33,6 +33,7 @@ async function ensureDocx(){
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -352,15 +353,14 @@ const R={
   bmp:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'pdf',n:'PDF'}],
   gif:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'pdf',n:'PDF'}],
   svg:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'pdf',n:'PDF'}],
-  // Video (只保留浏览器能解码的格式)
+  // Video (FFmpeg.wasm 支持所有格式)
   mp4:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM 视频'}],
-  webm:[{f:'gif',n:'GIF 动图'}],
-  // MOV/AVI/MKV/WMV/FLV: 浏览器无法解码，不显示转换选项
-  mov:[],
-  avi:[],
-  mkv:[],
-  wmv:[],
-  flv:[],
+  webm:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4(H.264)'}],
+  mov:[{f:'mp4',n:'MP4(H.264)'},{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM'}],
+  avi:[{f:'mp4',n:'MP4(H.264)'},{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM'}],
+  mkv:[{f:'mp4',n:'MP4(H.264)'},{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM'}],
+  wmv:[{f:'mp4',n:'MP4(H.264)'},{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM'}],
+  flv:[{f:'mp4',n:'MP4(H.264)'},{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM'}],
   // Audio
   mp3:[{f:'wav',n:'WAV'},{f:'ogg',n:'OGG'}],
   wav:[{f:'mp3',n:'MP3'},{f:'ogg',n:'OGG'}],
@@ -450,10 +450,10 @@ hook($('go'),'click',async()=>{
     else if(k==='csv->xlsx')blob=await csv2xls(sf);
     else if(k==='csv->txt')blob=await csv2txt(sf);
     else if(k==='csv->html')blob=await csv2html(sf);
-    // === Video ===
+    // === Video (FFmpeg.wasm) ===
     else if(k==='mp4->gif'||k==='mov->gif'||k==='avi->gif'||k==='mkv->gif'||k==='webm->gif'||k==='wmv->gif'||k==='flv->gif')blob=await vid2gif(sf);
-    else if(k==='mov->mp4'||k==='avi->mp4'||k==='mkv->mp4'||k==='webm->mp4'||k==='wmv->mp4'||k==='flv->mp4')blob=await vid2mp4(sf);
-    else if(k==='mp4->webm')blob=await vid2mp4(sf); // 同样用 MediaRecorder
+    else if(k==='mov->mp4'||k==='avi->mp4'||k==='mkv->mp4'||k==='wmv->mp4'||k==='flv->mp4'||k==='webm->mp4')blob=await vid2mp4(sf);
+    else if(k==='mp4->webm'||k==='mov->webm'||k==='avi->webm'||k==='mkv->webm')blob=await vid2webm(sf);
     // === Audio ===
     else if(k==='mp3->wav'||k==='ogg->wav'||k==='aac->wav'||k==='flac->wav')blob=await audConvert(sf,'wav');
     else if(k==='wav->mp3'||k==='ogg->mp3'||k==='aac->mp3'||k==='flac->mp3')blob=await audConvert(sf,'mp3');
@@ -741,207 +741,78 @@ async function csv2xls(f){const t=await rd(f);const wb=XLSX.read(t,{type:'string
 async function csv2txt(f){return new Blob([await rd(f)],{type:'text/plain;charset=utf-8'})}
 async function csv2html(f){const t=await rd(f);const wb=XLSX.read(t,{type:'string'});return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #eaeaea;padding:8px 12px}th{background:#f8f8f7}</style></head><body>${XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]])}</body></html>`],{type:'text/html;charset=utf-8'})}
 
-// ====== Video Engine ======
-function loadVideo(f){
-  return new Promise((ok,no)=>{
-    const url=URL.createObjectURL(f);
-    const v=document.createElement('video');
-    v.muted=true;v.playsInline=true;v.preload='auto';v.crossOrigin='anonymous';
-    const timer=setTimeout(()=>no(new Error('视频加载超时，此格式可能不被浏览器支持')),8000);
-    v.onloadeddata=()=>{clearTimeout(timer);ok({video:v,url,duration:v.duration,w:v.videoWidth,h:v.videoHeight})};
-    v.onerror=()=>{clearTimeout(timer);no(new Error('此视频格式浏览器无法解码。建议先用电脑端工具（如 FFmpeg/格式工厂）转为 MP4(H.264) 后再操作。'))};
-    v.src=url;
+// ====== Video Engine (FFmpeg.wasm) ======
+let ffmpegInstance=null;
+async function getFFmpeg(){
+  if(ffmpegInstance&&ffmpegInstance.loaded)return ffmpegInstance;
+  $('progD').textContent='正在加载 FFmpeg 引擎 (首次约 15 秒)...';
+  const{FFmpeg}=globalThis.FFmpeg || window;
+  const ff=new FFmpeg();
+  ff.on('progress',({progress})=>{
+    $('progD').textContent=`正在转码... ${Math.round(progress*100)}%`;
   });
-}
-
-function seekTo(video,time){
-  return new Promise((ok,no)=>{
-    const timer=setTimeout(()=>{video.onseeked=null;ok()},2000); // 2秒超时
-    video.onseeked=()=>{clearTimeout(timer);video.onseeked=null;ok()};
-    video.currentTime=time;
+  ff.on('log',({message})=>{console.log('[ffmpeg]',message)});
+  await ff.load({
+    coreURL:'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
+    wasmURL:'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm',
   });
+  ffmpegInstance=ff;
+  return ff;
 }
 
 async function vid2gif(f){
-  $('progD').textContent='正在加载视频...';
-  const{video,url,duration,w:ow,h:oh}=await loadVideo(f);
+  const ff=await getFFmpeg();
+  $('progD').textContent='正在写入视频文件...';
+  const inputData=new Uint8Array(await f.arrayBuffer());
+  const inName='input.'+ext(f.name);
+  await ff.writeFile(inName,inputData);
 
-  // 移动端更小分辨率
+  $('progD').textContent='正在转码为 GIF...';
+  const outName='out.gif';
   const isMobile=window.innerWidth<768;
-  const maxW=isMobile?320:480;
-  const w=Math.min(ow,maxW);
-  const h=Math.round(w*oh/ow);
-  const fps=isMobile?8:10;
-  const maxFrames=isMobile?80:150;
-  const totalFrames=Math.min(Math.floor(duration*fps),maxFrames);
-  const step=duration/totalFrames;
+  const scale=isMobile?'320:-1':'480:-1';
+  const fps=isMobile?'8':'10';
+  await ff.exec(['-i',inName,'-vf',`fps=${fps},scale=${scale}:flags=lanczos`,'-loop','0',outName]);
 
-  $('progD').textContent=`正在提取 ${totalFrames} 帧 (${w}x${h})...`;
-
-  const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
-  const ctx=canvas.getContext('2d');
-
-  // 收集帧图片数据
-  const frames=[];
-  for(let i=0;i<totalFrames;i++){
-    $('progD').textContent=`正在提取帧 ${i+1}/${totalFrames}...`;
-    await seekTo(video,i*step);
-    ctx.drawImage(video,0,0,w,h);
-    frames.push(ctx.getImageData(0,0,w,h));
-  }
-
-  URL.revokeObjectURL(url);
-  $('progD').textContent='正在编码 GIF...';
-
-  // 尝试 gif.js
-  try{
-    const gif=new GIF({workers:2,quality:10,width:w,height:h,
-      workerScript:'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js'});
-    frames.forEach(fr=>gif.addFrame(fr,{copy:true,delay:Math.round(1000/fps)}));
-    return await new Promise((ok,no)=>{
-      gif.on('finished',b=>ok(b));
-      gif.on('error',e=>no(e));
-      setTimeout(()=>no(new Error('GIF 编码超时')),60000);
-      gif.render();
-    });
-  }catch(e){
-    // gif.js 失败，用纯 JS 编码器回退
-    $('progD').textContent='Web Worker 失败，使用主线程编码...';
-    return encodeGifFallback(frames,w,h,fps);
-  }
-}
-
-// 纯 JS GIF 编码器 (无需 Worker)
-function encodeGifFallback(frames,w,h,fps){
-  // 简单 GIF89a 编码
-  const buf=[];
-  const write=v=>buf.push(v);
-  const writeStr=s=>{for(let i=0;i<s.length;i++)buf.push(s.charCodeAt(i))};
-  const write16=v=>{write(v&0xff);write((v>>8)&0xff)};
-
-  // Header
-  writeStr('GIF89a');
-  write16(w);write16(h);
-  write(0xf7);write(0);write(0); // GCT flag, 256 colors
-
-  // Global Color Table (256 colors, simplified)
-  for(let i=0;i<256;i++){write(i);write(i);write(i)}
-
-  // NETSCAPE extension for looping
-  write(0x21);write(0xff);write(11);
-  writeStr('NETSCAPE2.0');
-  write(3);write(1);write16(0);write(0);
-
-  // Frames
-  const delay=Math.round(100/fps); // in centiseconds
-  for(const frame of frames){
-    // Graphic Control Extension
-    write(0x21);write(0xf9);write(4);
-    write(0x04);write16(delay);write(0);write(0);
-
-    // Image Descriptor
-    write(0x2c);write16(0);write16(0);write16(w);write16(h);
-    write(0x07); // LCT flag, 8-bit
-
-    // Local Color Table (256 colors)
-    for(let i=0;i<256;i++){write(i);write(i);write(i)}
-
-    // LZW Minimum Code Size
-    const minCode=8;write(minCode);
-
-    // 压缩像素数据 (简单 LZW)
-    const pixels=frame.data;
-    const indexBuf=[];
-    for(let p=0;p<pixels.length;p+=4){
-      const r=pixels[p],g=pixels[p+1],b=pixels[p+2];
-      indexBuf.push((r*6/256|0)*36+(g*6/256|0)*6+(b*6/256|0));
-    }
-    // 用简单 RLE 代替完整 LZW
-    const compressed=simpleLZW(indexBuf,minCode+1);
-    // 分成 255 字节的子块
-    for(let i=0;i<compressed.length;i+=255){
-      const chunk=compressed.slice(i,Math.min(i+255,compressed.length));
-      write(chunk.length);
-      chunk.forEach(write);
-    }
-    write(0); // 块终止符
-  }
-  write(0x3b); // GIF Trailer
-
-  return new Blob([new Uint8Array(buf)],{type:'image/gif'});
-}
-
-function simpleLZW(pixels,minCodeSize){
-  // 简单的未压缩输出 (clear + data + EOI)
-  const clearCode=1<<minCodeSize;
-  const eoiCode=clearCode+1;
-  const out=[];
-  let bitBuf=0,bitCount=0;
-  const emit=code=>{
-    const bits=minCodeSize;
-    bitBuf|=(code<<bitCount);bitCount+=bits;
-    while(bitCount>=8){out.push(bitBuf&0xff);bitBuf>>=8;bitCount-=8}
-  };
-  const codeSize=minCodeSize+1;
-  emit(clearCode);
-  for(const p of pixels)emit(p%clearCode);
-  emit(eoiCode);
-  if(bitCount>0)out.push(bitBuf&0xff);
-  return out;
+  $('progD').textContent='正在读取 GIF...';
+  const data=await ff.readFile(outName);
+  await ff.deleteFile(inName);await ff.deleteFile(outName);
+  return new Blob([data.buffer],{type:'image/gif'});
 }
 
 async function vid2mp4(f){
-  const ext_=ext(f.name);
-  // 如果已经是 mp4 兼容格式，直接返回
-  if(ext_==='mp4'){return f}
+  // MP4(H.264) 输出 - 手机可播放
+  const ff=await getFFmpeg();
+  $('progD').textContent='正在写入视频文件...';
+  const inputData=new Uint8Array(await f.arrayBuffer());
+  const inName='input.'+ext(f.name);
+  await ff.writeFile(inName,inputData);
 
-  $('progD').textContent='正在加载视频...';
-  const{video,url,duration,w,h}=await loadVideo(f);
+  $('progD').textContent='正在转码为 MP4(H.264)...';
+  const outName='output.mp4';
+  await ff.exec(['-i',inName,'-c:v','libx264','-preset','ultrafast','-crf','23','-c:a','aac','-b:a','128k','-movflags','+faststart',outName]);
 
-  // 检查 MediaRecorder 支持
-  if(typeof MediaRecorder==='undefined'||!HTMLCanvasElement.prototype.captureStream){
-    URL.revokeObjectURL(url);
-    throw new Error('此浏览器不支持视频转码，请使用桌面端 Chrome/Edge');
-  }
-
-  $('progD').textContent='正在转码...';
-  const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
-  const ctx=canvas.getContext('2d');
-  const stream=canvas.captureStream(30);
-
-  // 尝试添加音轨
-  try{
-    const actx=new AudioContext();
-    const src=actx.createMediaElementSource(video);
-    const dest=actx.createMediaStreamDestination();
-    src.connect(dest);src.connect(actx.destination);
-    dest.stream.getAudioTracks().forEach(t=>stream.addTrack(t));
-  }catch(e){}
-
-  // 选择最佳支持的编码格式
-  const types=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
-  const mime=types.find(t=>MediaRecorder.isTypeSupported(t))||'video/webm';
-  const outExt=mime.includes('webm')?'webm':'mp4';
-
-  const chunks=[];
-  const rec=new MediaRecorder(stream,{mimeType:mime});
-  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
-  const done=new Promise(ok=>rec.onstop=()=>ok(new Blob(chunks,{type:mime})));
-
-  rec.start(100);
-  video.play();
-  const draw=()=>{if(!video.paused&&!video.ended){ctx.drawImage(video,0,0,w,h);requestAnimationFrame(draw)}};
-  draw();
-  await new Promise(ok=>{video.onended=ok;video.onerror=ok});
-  rec.stop();
-  const blob=await done;
-  URL.revokeObjectURL(url);
-  // 返回 blob 和实际扩展名
-  blob._ext=outExt;
-  return blob;
+  $('progD').textContent='正在读取文件...';
+  const data=await ff.readFile(outName);
+  await ff.deleteFile(inName);await ff.deleteFile(outName);
+  return new Blob([data.buffer],{type:'video/mp4'});
 }
 
-async function vid2webm(f){return vid2mp4(f)} // 同样的逻辑
+async function vid2webm(f){
+  const ff=await getFFmpeg();
+  $('progD').textContent='正在写入视频文件...';
+  const inputData=new Uint8Array(await f.arrayBuffer());
+  const inName='input.'+ext(f.name);
+  await ff.writeFile(inName,inputData);
+
+  $('progD').textContent='正在转码为 WebM...';
+  const outName='output.webm';
+  await ff.exec(['-i',inName,'-c:v','libvpx','-crf','10','-b:v','1M','-c:a','libvorbis',outName]);
+
+  const data=await ff.readFile(outName);
+  await ff.deleteFile(inName);await ff.deleteFile(outName);
+  return new Blob([data.buffer],{type:'video/webm'});
+}
 
 // ====== Audio Engine ======
 async function audConvert(f,targetFmt){
