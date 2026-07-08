@@ -352,14 +352,15 @@ const R={
   bmp:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'pdf',n:'PDF'}],
   gif:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'pdf',n:'PDF'}],
   svg:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'pdf',n:'PDF'}],
-  // Video
+  // Video (只保留浏览器能解码的格式)
   mp4:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM 视频'}],
-  mov:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM 视频'}],
-  avi:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM 视频'}],
-  mkv:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM 视频'}],
-  webm:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4 视频'}],
-  wmv:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM 视频'}],
-  flv:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM 视频'}],
+  webm:[{f:'gif',n:'GIF 动图'}],
+  // MOV/AVI/MKV/WMV/FLV: 浏览器无法解码，不显示转换选项
+  mov:[],
+  avi:[],
+  mkv:[],
+  wmv:[],
+  flv:[],
   // Audio
   mp3:[{f:'wav',n:'WAV'},{f:'ogg',n:'OGG'}],
   wav:[{f:'mp3',n:'MP3'},{f:'ogg',n:'OGG'}],
@@ -401,7 +402,7 @@ function handle(f){
       $('fg').appendChild(b);
     });
     $('fs').classList.add('show');$('go').classList.remove('show');
-  }else{$('fg').innerHTML='<p style="color:var(--text3);font-size:13px">暂不支持此格式的转换</p>';$('fs').classList.add('show')}
+  }else{$('fg').innerHTML='<p style="color:var(--text3);font-size:13px;line-height:1.8">此格式暂不支持浏览器端转换<br><span style="font-size:12px">MOV/AVI/MKV 等请先用格式工厂或 FFmpeg 转为 MP4(H.264)</span></p>';$('fs').classList.add('show')}
 }
 
 hook($('go'),'click',async()=>{
@@ -746,8 +747,9 @@ function loadVideo(f){
     const url=URL.createObjectURL(f);
     const v=document.createElement('video');
     v.muted=true;v.playsInline=true;v.preload='auto';v.crossOrigin='anonymous';
-    v.onloadeddata=()=>ok({video:v,url,duration:v.duration,w:v.videoWidth,h:v.videoHeight});
-    v.onerror=()=>no(new Error('视频加载失败，浏览器可能不支持此格式'));
+    const timer=setTimeout(()=>no(new Error('视频加载超时，此格式可能不被浏览器支持')),8000);
+    v.onloadeddata=()=>{clearTimeout(timer);ok({video:v,url,duration:v.duration,w:v.videoWidth,h:v.videoHeight})};
+    v.onerror=()=>{clearTimeout(timer);no(new Error('此视频格式浏览器无法解码。建议先用电脑端工具（如 FFmpeg/格式工厂）转为 MP4(H.264) 后再操作。'))};
     v.src=url;
   });
 }
