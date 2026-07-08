@@ -220,12 +220,21 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
 <!-- UnicornStudio 动态背景 (仅桌面端) -->
 <div id="us-bg" data-us-project="HszpeCBkwYw9Wzp8smrN" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;overflow:hidden;display:none"></div>
 <!-- 移动端 CSS 回退背景 -->
-<div id="css-bg" style="position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:#06060b">
-  <div style="position:absolute;width:500px;height:500px;border-radius:50%;filter:blur(100px);background:rgba(139,92,246,.15);top:-8%;left:8%;animation:f1 28s ease-in-out infinite"></div>
-  <div style="position:absolute;width:420px;height:420px;border-radius:50%;filter:blur(100px);background:rgba(244,63,94,.1);bottom:5%;right:5%;animation:f1 28s ease-in-out infinite reverse"></div>
-  <div style="position:absolute;width:360px;height:360px;border-radius:50%;filter:blur(100px);background:rgba(14,165,233,.08);top:35%;left:55%;animation:f1 28s ease-in-out 5s infinite"></div>
-</div>
-<style>@keyframes f1{0%,100%{transform:translate(0,0)}25%{transform:translate(35px,-25px)}50%{transform:translate(-18px,35px)}75%{transform:translate(25px,15px)}}</style>
+<div id="css-bg"></div>
+<style>
+#css-bg{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:#06060b;
+  background-image:
+    radial-gradient(ellipse 60% 50% at 20% 15%,rgba(139,92,246,.18),transparent),
+    radial-gradient(ellipse 50% 45% at 80% 85%,rgba(244,63,94,.12),transparent),
+    radial-gradient(ellipse 45% 40% at 60% 40%,rgba(14,165,233,.08),transparent),
+    radial-gradient(ellipse 35% 30% at 40% 70%,rgba(16,185,129,.06),transparent);
+}
+@supports(-webkit-touch-callout:none){
+  /* iOS Safari 优化 */
+  #css-bg{-webkit-transform:translateZ(0);transform:translateZ(0)}
+}
+</style>
 
 <div class="page">
   <div class="hero anim">
