@@ -213,7 +213,7 @@ body{font-family:var(--sans);background:#06060b;color:var(--text);line-height:1.
 </head>
 <body>
 <!-- UnicornStudio 动态背景 -->
-<div data-us-project="HszpeCBkwYw9Wzp8smrN" data-us-production="true" style="position:fixed;inset:0;z-index:0;pointer-events:none"></div>
+<div id="us-bg" data-us-project="HszpeCBkwYw9Wzp8smrN" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;overflow:hidden"></div>
 
 <div class="page">
   <div class="hero anim">
@@ -708,7 +708,9 @@ function rI(){$('il').innerHTML=imf.map((f,i)=>{const u=URL.createObjectURL(f);r
 hook($('goI'),'click',async()=>{if(!imf.length)return;$('progI').classList.add('show');$('goI').disabled=true;try{const{jsPDF}=window.jspdf;let doc=null;for(const f of imf){const img=await loadImg(f);const w=img.naturalWidth,h=img.naturalHeight;if(!doc)doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});else doc.addPage([w,h],w>h?'landscape':'portrait');const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h)}show(doc.output('blob'),'图片合并.pdf',$('resI'))}catch(e){$('resI').innerHTML=`<div class="res-err">${e.message}</div>`;$('resI').classList.add('show')}finally{$('progI').classList.remove('show');$('goI').disabled=false}});
 
 // UnicornStudio 背景初始化
+if(typeof UnicornStudio!=='undefined'){UnicornStudio.init()}
 </script>
-<script src="https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v2.2.6/dist/unicornStudio.umd.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v2.2.6/dist/unicornStudio.umd.js"></script>
+<script>setTimeout(()=>{if(typeof UnicornStudio!=='undefined')UnicornStudio.init()},500)</script>
 </body>
 </html>
