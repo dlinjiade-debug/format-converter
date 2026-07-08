@@ -47,7 +47,7 @@ async function ensureDocx(){
   --mono:'JetBrains Mono','Consolas',monospace;
 }
 html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
-body{font-family:var(--sans);background:#06060b;color:var(--text);line-height:1.6;min-height:100vh;overflow-x:hidden}
+body{font-family:var(--sans);background:transparent;color:var(--text);line-height:1.6;min-height:100vh;overflow-x:hidden}
 
 /* Layout */
 .page{max-width:840px;margin:0 auto;padding:52px 24px 80px;position:relative;z-index:1}
@@ -220,7 +220,7 @@ body{font-family:var(--sans);background:#06060b;color:var(--text);line-height:1.
 <!-- UnicornStudio 动态背景 (仅桌面端) -->
 <div id="us-bg" data-us-project="HszpeCBkwYw9Wzp8smrN" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;overflow:hidden;display:none"></div>
 <!-- 移动端 CSS 回退背景 -->
-<div id="css-bg" style="position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden">
+<div id="css-bg" style="position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:#06060b">
   <div style="position:absolute;width:500px;height:500px;border-radius:50%;filter:blur(100px);background:rgba(139,92,246,.15);top:-8%;left:8%;animation:f1 28s ease-in-out infinite"></div>
   <div style="position:absolute;width:420px;height:420px;border-radius:50%;filter:blur(100px);background:rgba(244,63,94,.1);bottom:5%;right:5%;animation:f1 28s ease-in-out infinite reverse"></div>
   <div style="position:absolute;width:360px;height:360px;border-radius:50%;filter:blur(100px);background:rgba(14,165,233,.08);top:35%;left:55%;animation:f1 28s ease-in-out 5s infinite"></div>
@@ -723,18 +723,37 @@ async function csv2txt(f){return new Blob([await rd(f)],{type:'text/plain;charse
 async function csv2html(f){const t=await rd(f);const wb=XLSX.read(t,{type:'string'});return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #eaeaea;padding:8px 12px}th{background:#f8f8f7}</style></head><body>${XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]])}</body></html>`],{type:'text/html;charset=utf-8'})}
 
 // ====== Video Engine ======
+function loadVideo(f){
+  return new Promise((ok,no)=>{
+    const url=URL.createObjectURL(f);
+    const v=document.createElement('video');
+    v.muted=true;v.playsInline=true;v.preload='auto';v.crossOrigin='anonymous';
+    v.onloadeddata=()=>ok({video:v,url,duration:v.duration,w:v.videoWidth,h:v.videoHeight});
+    v.onerror=()=>no(new Error('视频加载失败，浏览器可能不支持此格式'));
+    v.src=url;
+  });
+}
+
+function seekTo(video,time){
+  return new Promise((ok,no)=>{
+    const timer=setTimeout(()=>{video.onseeked=null;ok()},2000); // 2秒超时
+    video.onseeked=()=>{clearTimeout(timer);video.onseeked=null;ok()};
+    video.currentTime=time;
+  });
+}
+
 async function vid2gif(f){
   $('progD').textContent='正在加载视频...';
-  const url=URL.createObjectURL(f);
-  const video=document.createElement('video');
-  video.muted=true;video.playsInline=true;video.preload='auto';
-  await new Promise((ok,no)=>{video.onloadeddata=ok;video.onerror=()=>no(new Error('视频加载失败，格式可能不支持'));video.src=url});
+  const{video,url,duration,w:ow,h:oh}=await loadVideo(f);
 
-  const duration=video.duration;
-  const w=Math.min(video.videoWidth,480); // 限制宽度
-  const h=Math.round(w*video.videoHeight/video.videoWidth);
-  const fps=10; // GIF 帧率
-  const totalFrames=Math.min(Math.floor(duration*fps),150); // 最多150帧
+  // 移动端更小分辨率
+  const isMobile=window.innerWidth<768;
+  const maxW=isMobile?320:480;
+  const w=Math.min(ow,maxW);
+  const h=Math.round(w*oh/ow);
+  const fps=isMobile?8:10;
+  const maxFrames=isMobile?80:150;
+  const totalFrames=Math.min(Math.floor(duration*fps),maxFrames);
   const step=duration/totalFrames;
 
   $('progD').textContent=`正在提取 ${totalFrames} 帧 (${w}x${h})...`;
@@ -742,54 +761,135 @@ async function vid2gif(f){
   const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
   const ctx=canvas.getContext('2d');
 
-  const gif=new GIF({
-    workers:2,
-    quality:10,
-    width:w,
-    height:h,
-    workerScript:'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js'
-  });
-
+  // 收集帧图片数据
+  const frames=[];
   for(let i=0;i<totalFrames;i++){
-    $('progD').textContent=`正在编码帧 ${i+1}/${totalFrames}...`;
-    video.currentTime=i*step;
-    await new Promise(r=>video.onseeked=r);
+    $('progD').textContent=`正在提取帧 ${i+1}/${totalFrames}...`;
+    await seekTo(video,i*step);
     ctx.drawImage(video,0,0,w,h);
-    gif.addFrame(ctx,{copy:true,delay:Math.round(1000/fps)});
+    frames.push(ctx.getImageData(0,0,w,h));
   }
 
-  $('progD').textContent='正在生成 GIF...';
-  const blob=await new Promise((ok,no)=>{
-    gif.on('finished',b=>ok(b));
-    gif.on('error',e=>no(new Error('GIF 编码失败: '+e.message)));
-    gif.render();
-  });
-
   URL.revokeObjectURL(url);
-  return blob;
+  $('progD').textContent='正在编码 GIF...';
+
+  // 尝试 gif.js
+  try{
+    const gif=new GIF({workers:2,quality:10,width:w,height:h,
+      workerScript:'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js'});
+    frames.forEach(fr=>gif.addFrame(fr,{copy:true,delay:Math.round(1000/fps)}));
+    return await new Promise((ok,no)=>{
+      gif.on('finished',b=>ok(b));
+      gif.on('error',e=>no(e));
+      setTimeout(()=>no(new Error('GIF 编码超时')),60000);
+      gif.render();
+    });
+  }catch(e){
+    // gif.js 失败，用纯 JS 编码器回退
+    $('progD').textContent='Web Worker 失败，使用主线程编码...';
+    return encodeGifFallback(frames,w,h,fps);
+  }
+}
+
+// 纯 JS GIF 编码器 (无需 Worker)
+function encodeGifFallback(frames,w,h,fps){
+  // 简单 GIF89a 编码
+  const buf=[];
+  const write=v=>buf.push(v);
+  const writeStr=s=>{for(let i=0;i<s.length;i++)buf.push(s.charCodeAt(i))};
+  const write16=v=>{write(v&0xff);write((v>>8)&0xff)};
+
+  // Header
+  writeStr('GIF89a');
+  write16(w);write16(h);
+  write(0xf7);write(0);write(0); // GCT flag, 256 colors
+
+  // Global Color Table (256 colors, simplified)
+  for(let i=0;i<256;i++){write(i);write(i);write(i)}
+
+  // NETSCAPE extension for looping
+  write(0x21);write(0xff);write(11);
+  writeStr('NETSCAPE2.0');
+  write(3);write(1);write16(0);write(0);
+
+  // Frames
+  const delay=Math.round(100/fps); // in centiseconds
+  for(const frame of frames){
+    // Graphic Control Extension
+    write(0x21);write(0xf9);write(4);
+    write(0x04);write16(delay);write(0);write(0);
+
+    // Image Descriptor
+    write(0x2c);write16(0);write16(0);write16(w);write16(h);
+    write(0x07); // LCT flag, 8-bit
+
+    // Local Color Table (256 colors)
+    for(let i=0;i<256;i++){write(i);write(i);write(i)}
+
+    // LZW Minimum Code Size
+    const minCode=8;write(minCode);
+
+    // 压缩像素数据 (简单 LZW)
+    const pixels=frame.data;
+    const indexBuf=[];
+    for(let p=0;p<pixels.length;p+=4){
+      const r=pixels[p],g=pixels[p+1],b=pixels[p+2];
+      indexBuf.push((r*6/256|0)*36+(g*6/256|0)*6+(b*6/256|0));
+    }
+    // 用简单 RLE 代替完整 LZW
+    const compressed=simpleLZW(indexBuf,minCode+1);
+    // 分成 255 字节的子块
+    for(let i=0;i<compressed.length;i+=255){
+      const chunk=compressed.slice(i,Math.min(i+255,compressed.length));
+      write(chunk.length);
+      chunk.forEach(write);
+    }
+    write(0); // 块终止符
+  }
+  write(0x3b); // GIF Trailer
+
+  return new Blob([new Uint8Array(buf)],{type:'image/gif'});
+}
+
+function simpleLZW(pixels,minCodeSize){
+  // 简单的未压缩输出 (clear + data + EOI)
+  const clearCode=1<<minCodeSize;
+  const eoiCode=clearCode+1;
+  const out=[];
+  let bitBuf=0,bitCount=0;
+  const emit=code=>{
+    const bits=minCodeSize;
+    bitBuf|=(code<<bitCount);bitCount+=bits;
+    while(bitCount>=8){out.push(bitBuf&0xff);bitBuf>>=8;bitCount-=8}
+  };
+  const codeSize=minCodeSize+1;
+  emit(clearCode);
+  for(const p of pixels)emit(p%clearCode);
+  emit(eoiCode);
+  if(bitCount>0)out.push(bitBuf&0xff);
+  return out;
 }
 
 async function vid2mp4(f){
-  // 浏览器端视频转码能力有限，尝试 MediaRecorder
-  $('progD').textContent='正在加载视频...';
-  const url=URL.createObjectURL(f);
-  const video=document.createElement('video');
-  video.muted=true;video.playsInline=true;video.preload='auto';
-  await new Promise((ok,no)=>{video.onloadeddata=ok;video.onerror=()=>no(new Error('视频加载失败'));video.src=url});
-
-  // 如果源格式已经是 mp4 兼容的，直接返回
   const ext_=ext(f.name);
-  if(['mp4'].includes(ext_)){
+  // 如果已经是 mp4 兼容格式，直接返回
+  if(ext_==='mp4'){return f}
+
+  $('progD').textContent='正在加载视频...';
+  const{video,url,duration,w,h}=await loadVideo(f);
+
+  // 检查 MediaRecorder 支持
+  if(typeof MediaRecorder==='undefined'||!HTMLCanvasElement.prototype.captureStream){
     URL.revokeObjectURL(url);
-    return f; // 直接返回原文件
+    throw new Error('此浏览器不支持视频转码，请使用桌面端 Chrome/Edge');
   }
 
-  // 尝试用 MediaRecorder 转码
-  const w=video.videoWidth;const h=video.videoHeight;
+  $('progD').textContent='正在转码...';
   const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
   const ctx=canvas.getContext('2d');
   const stream=canvas.captureStream(30);
-  // 添加音轨
+
+  // 尝试添加音轨
   try{
     const actx=new AudioContext();
     const src=actx.createMediaElementSource(video);
@@ -798,16 +898,20 @@ async function vid2mp4(f){
     dest.stream.getAudioTracks().forEach(t=>stream.addTrack(t));
   }catch(e){}
 
-  const chunks=[];
-  const rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9'});
-  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
-  const done=new Promise(ok=>rec.onstop=()=>ok(new Blob(chunks,{type:'video/webm'})));
+  // 选择最佳支持的编码格式
+  const types=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+  const mime=types.find(t=>MediaRecorder.isTypeSupported(t))||'video/webm';
 
-  rec.start();
+  const chunks=[];
+  const rec=new MediaRecorder(stream,{mimeType:mime});
+  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+  const done=new Promise(ok=>rec.onstop=()=>ok(new Blob(chunks,{type:mime})));
+
+  rec.start(100);
   video.play();
   const draw=()=>{if(!video.paused&&!video.ended){ctx.drawImage(video,0,0,w,h);requestAnimationFrame(draw)}};
   draw();
-  await new Promise(ok=>video.onended=ok);
+  await new Promise(ok=>{video.onended=ok;video.onerror=ok});
   rec.stop();
   const blob=await done;
   URL.revokeObjectURL(url);
