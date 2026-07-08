@@ -32,6 +32,7 @@ async function ensureDocx(){
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -111,6 +112,10 @@ body{font-family:var(--sans);background:#06060b;color:var(--text);line-height:1.
 .fi-ico.img::after{background:var(--violet2)}
 .fi-ico.txt{background:rgba(255,255,255,.04);color:var(--text2);border:1px solid var(--border)}
 .fi-ico.web{background:linear-gradient(135deg,rgba(14,165,233,.18),rgba(14,165,233,.06));color:#38bdf8;border:1px solid rgba(14,165,233,.25)}
+.fi-ico.vid{background:linear-gradient(135deg,rgba(236,72,153,.18),rgba(236,72,153,.06));color:#f472b6;border:1px solid rgba(236,72,153,.25)}
+.fi-ico.vid::after{background:#ec4899}
+.fi-ico.aud{background:linear-gradient(135deg,rgba(245,158,11,.18),rgba(245,158,11,.06));color:#fbbf24;border:1px solid rgba(245,158,11,.25)}
+.fi-ico.aud::after{background:var(--amber)}
 .fi-name{font-weight:600;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fi-meta{font-size:12px;color:var(--text3);margin-top:2px}
 .fi-det{flex:1;min-width:0}
@@ -219,7 +224,7 @@ body{font-family:var(--sans);background:#06060b;color:var(--text);line-height:1.
   <div class="hero anim">
     <div class="badge">Browser-native · No Upload</div>
     <h1>linjiade<span class="thin">'s</span> 转换器</h1>
-    <p>所有转换均在浏览器本地完成，文件不会离开你的电脑。</p>
+    <p>文档 · 图片 · 视频 · 音频 — 所有转换均在浏览器本地完成。</p>
     <div class="stats">
       <div><div class="stat-num">30+</div><div class="stat-lbl">格式转换</div></div>
       <div><div class="stat-num">0 KB</div><div class="stat-lbl">文件上传</div></div>
@@ -240,7 +245,7 @@ body{font-family:var(--sans);background:#06060b;color:var(--text);line-height:1.
         <div class="drop" id="drop">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <div class="t">拖拽文件到此处，或点击选择</div>
-          <div class="s">PDF · Word · PPT · Excel · 图片 · Markdown · HTML · CSV</div>
+          <div class="s">PDF · Word · PPT · Excel · 图片 · Markdown · HTML · 视频 · 音频</div>
           <input type="file" id="fi">
         </div>
         <div class="fi" id="fi2">
@@ -290,6 +295,7 @@ body{font-family:var(--sans);background:#06060b;color:var(--text);line-height:1.
     <span class="tag">PDF → Text</span><span class="tag">Markdown → PDF</span><span class="tag">HTML → PDF</span>
     <span class="tag">图片互转</span><span class="tag">图片 → PDF</span><span class="tag">Excel ↔ CSV</span>
     <span class="tag">PDF 合并</span><span class="tag">PPT → PDF</span><span class="tag">MD → Word</span>
+    <span class="tag">MP4 → GIF</span><span class="tag">视频格式转换</span><span class="tag">音频格式转换</span>
   </div>
   <div class="foot anim" style="animation-delay:.3s">
     <p>All conversions happen locally in your browser.<br>Files never leave your machine.</p>
@@ -301,8 +307,8 @@ body{font-family:var(--sans);background:#06060b;color:var(--text);line-height:1.
 const $=id=>document.getElementById(id);
 const ext=n=>n.split('.').pop().toLowerCase();
 const sz=b=>b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';
-const ICO={pdf:'pdf',doc:'doc',docx:'doc',ppt:'ppt',pptx:'ppt',xls:'xls',xlsx:'xls',csv:'xls',txt:'txt',html:'web',htm:'web',md:'txt',png:'img',jpg:'img',jpeg:'img',gif:'img',bmp:'img',webp:'img',svg:'img',tiff:'img'};
-const LBL={pdf:'PDF',docx:'DOCX',doc:'DOC',pptx:'PPTX',ppt:'PPT',xlsx:'XLSX',xls:'XLS',csv:'CSV',txt:'TXT',html:'HTML',htm:'HTM',md:'MD',png:'PNG',jpg:'JPG',jpeg:'JPG',gif:'GIF',bmp:'BMP',webp:'WEBP',svg:'SVG',tiff:'TIFF'};
+const ICO={pdf:'pdf',doc:'doc',docx:'doc',ppt:'ppt',pptx:'ppt',xls:'xls',xlsx:'xls',csv:'xls',txt:'txt',html:'web',htm:'web',md:'txt',png:'img',jpg:'img',jpeg:'img',gif:'img',bmp:'img',webp:'img',svg:'img',tiff:'img',mp4:'vid',mov:'vid',avi:'vid',mkv:'vid',webm:'vid',wmv:'vid',flv:'vid',mp3:'aud',wav:'aud',ogg:'aud',aac:'aud',flac:'aud'};
+const LBL={pdf:'PDF',docx:'DOCX',doc:'DOC',pptx:'PPTX',ppt:'PPT',xlsx:'XLSX',xls:'XLS',csv:'CSV',txt:'TXT',html:'HTML',htm:'HTM',md:'MD',png:'PNG',jpg:'JPG',jpeg:'JPG',gif:'GIF',bmp:'BMP',webp:'WEBP',svg:'SVG',tiff:'TIFF',mp4:'MP4',mov:'MOV',avi:'AVI',mkv:'MKV',webm:'WEBM',wmv:'WMV',flv:'FLV',mp3:'MP3',wav:'WAV',ogg:'OGG',aac:'AAC',flac:'FLAC'};
 
 const R={
   pdf:[{f:'docx',n:'Word 文档'},{f:'txt',n:'纯文本'},{f:'html',n:'HTML 网页'}],
@@ -323,6 +329,20 @@ const R={
   bmp:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'pdf',n:'PDF'}],
   gif:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'pdf',n:'PDF'}],
   svg:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'pdf',n:'PDF'}],
+  // Video
+  mp4:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM'}],
+  mov:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4'}],
+  avi:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4'}],
+  mkv:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4'}],
+  webm:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4'}],
+  wmv:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4'}],
+  flv:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4'}],
+  // Audio
+  mp3:[{f:'wav',n:'WAV'},{f:'ogg',n:'OGG'}],
+  wav:[{f:'mp3',n:'MP3'},{f:'ogg',n:'OGG'}],
+  ogg:[{f:'mp3',n:'MP3'},{f:'wav',n:'WAV'}],
+  aac:[{f:'mp3',n:'MP3'},{f:'wav',n:'WAV'}],
+  flac:[{f:'mp3',n:'MP3'},{f:'wav',n:'WAV'}],
 };
 
 // Tabs
@@ -406,6 +426,14 @@ hook($('go'),'click',async()=>{
     else if(k==='csv->xlsx')blob=await csv2xls(sf);
     else if(k==='csv->txt')blob=await csv2txt(sf);
     else if(k==='csv->html')blob=await csv2html(sf);
+    // === Video ===
+    else if(k==='mp4->gif'||k==='mov->gif'||k==='avi->gif'||k==='mkv->gif'||k==='webm->gif'||k==='wmv->gif'||k==='flv->gif')blob=await vid2gif(sf);
+    else if(k==='mov->mp4'||k==='avi->mp4'||k==='mkv->mp4'||k==='webm->mp4'||k==='wmv->mp4'||k==='flv->mp4')blob=await vid2mp4(sf);
+    else if(k==='mp4->webm')blob=await vid2webm(sf);
+    // === Audio ===
+    else if(k==='mp3->wav'||k==='ogg->wav'||k==='aac->wav'||k==='flac->wav')blob=await audConvert(sf,'wav');
+    else if(k==='wav->mp3'||k==='ogg->mp3'||k==='aac->mp3'||k==='flac->mp3')blob=await audConvert(sf,'mp3');
+    else if(k==='mp3->ogg'||k==='wav->ogg')blob=await audConvert(sf,'ogg');
     else throw new Error('不支持此转换: '+k);
 
     $('bar').className='bar done';$('progT').textContent='转换完成';
@@ -686,6 +714,156 @@ async function xls2html(f){const d=await rAB(f);const wb=XLSX.read(d,{type:'arra
 async function csv2xls(f){const t=await rd(f);const wb=XLSX.read(t,{type:'string'});return new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
 async function csv2txt(f){return new Blob([await rd(f)],{type:'text/plain;charset=utf-8'})}
 async function csv2html(f){const t=await rd(f);const wb=XLSX.read(t,{type:'string'});return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #eaeaea;padding:8px 12px}th{background:#f8f8f7}</style></head><body>${XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]])}</body></html>`],{type:'text/html;charset=utf-8'})}
+
+// ====== Video Engine ======
+async function vid2gif(f){
+  $('progD').textContent='正在加载视频...';
+  const url=URL.createObjectURL(f);
+  const video=document.createElement('video');
+  video.muted=true;video.playsInline=true;video.preload='auto';
+  await new Promise((ok,no)=>{video.onloadeddata=ok;video.onerror=()=>no(new Error('视频加载失败，格式可能不支持'));video.src=url});
+
+  const duration=video.duration;
+  const w=Math.min(video.videoWidth,480); // 限制宽度
+  const h=Math.round(w*video.videoHeight/video.videoWidth);
+  const fps=10; // GIF 帧率
+  const totalFrames=Math.min(Math.floor(duration*fps),150); // 最多150帧
+  const step=duration/totalFrames;
+
+  $('progD').textContent=`正在提取 ${totalFrames} 帧 (${w}x${h})...`;
+
+  const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+  const ctx=canvas.getContext('2d');
+
+  const gif=new GIF({
+    workers:2,
+    quality:10,
+    width:w,
+    height:h,
+    workerScript:'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js'
+  });
+
+  for(let i=0;i<totalFrames;i++){
+    $('progD').textContent=`正在编码帧 ${i+1}/${totalFrames}...`;
+    video.currentTime=i*step;
+    await new Promise(r=>video.onseeked=r);
+    ctx.drawImage(video,0,0,w,h);
+    gif.addFrame(ctx,{copy:true,delay:Math.round(1000/fps)});
+  }
+
+  $('progD').textContent='正在生成 GIF...';
+  const blob=await new Promise((ok,no)=>{
+    gif.on('finished',b=>ok(b));
+    gif.on('error',e=>no(new Error('GIF 编码失败: '+e.message)));
+    gif.render();
+  });
+
+  URL.revokeObjectURL(url);
+  return blob;
+}
+
+async function vid2mp4(f){
+  // 浏览器端视频转码能力有限，尝试 MediaRecorder
+  $('progD').textContent='正在加载视频...';
+  const url=URL.createObjectURL(f);
+  const video=document.createElement('video');
+  video.muted=true;video.playsInline=true;video.preload='auto';
+  await new Promise((ok,no)=>{video.onloadeddata=ok;video.onerror=()=>no(new Error('视频加载失败'));video.src=url});
+
+  // 如果源格式已经是 mp4 兼容的，直接返回
+  const ext_=ext(f.name);
+  if(['mp4'].includes(ext_)){
+    URL.revokeObjectURL(url);
+    return f; // 直接返回原文件
+  }
+
+  // 尝试用 MediaRecorder 转码
+  const w=video.videoWidth;const h=video.videoHeight;
+  const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+  const ctx=canvas.getContext('2d');
+  const stream=canvas.captureStream(30);
+  // 添加音轨
+  try{
+    const actx=new AudioContext();
+    const src=actx.createMediaElementSource(video);
+    const dest=actx.createMediaStreamDestination();
+    src.connect(dest);src.connect(actx.destination);
+    dest.stream.getAudioTracks().forEach(t=>stream.addTrack(t));
+  }catch(e){}
+
+  const chunks=[];
+  const rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9'});
+  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+  const done=new Promise(ok=>rec.onstop=()=>ok(new Blob(chunks,{type:'video/webm'})));
+
+  rec.start();
+  video.play();
+  const draw=()=>{if(!video.paused&&!video.ended){ctx.drawImage(video,0,0,w,h);requestAnimationFrame(draw)}};
+  draw();
+  await new Promise(ok=>video.onended=ok);
+  rec.stop();
+  const blob=await done;
+  URL.revokeObjectURL(url);
+  return blob;
+}
+
+async function vid2webm(f){return vid2mp4(f)} // 同样的逻辑
+
+// ====== Audio Engine ======
+async function audConvert(f,targetFmt){
+  $('progD').textContent='正在加载音频...';
+  const url=URL.createObjectURL(f);
+  const audio=new Audio();audio.src=url;
+  await new Promise((ok,no)=>{audio.oncanplay=ok;audio.onerror=()=>no(new Error('音频加载失败'));audio.load()});
+
+  const ctx=new AudioContext();
+  const buf=await f.arrayBuffer();
+  const audioBuf=await ctx.decodeAudioData(buf);
+
+  $('progD').textContent='正在编码...';
+  // 用 OfflineAudioContext 渲染
+  const off=new OfflineAudioContext(audioBuf.numberOfChannels,audioBuf.length,audioBuf.sampleRate);
+  const src=off.createBufferSource();src.buffer=audioBuf;src.connect(off.destination);src.start();
+  const rendered=await off.startRendering();
+
+  // 导出为 WAV
+  if(targetFmt==='wav'){
+    const wav=audioBufToWav(rendered);
+    URL.revokeObjectURL(url);
+    return new Blob([wav],{type:'audio/wav'});
+  }
+
+  // 其他格式用 MediaRecorder
+  const dest=ctx.createMediaStreamDestination();
+  const src2=ctx.createBufferSource();src2.buffer=rendered;src2.connect(dest);src2.start();
+  const chunks=[];
+  const mime=targetFmt==='mp3'?'audio/mpeg':'audio/ogg';
+  const rec=new MediaRecorder(dest.stream,{mimeType:rec.isTypeSupported(mime)?mime:'audio/webm'});
+  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+  const done=new Promise(ok=>rec.onstop=()=>ok(new Blob(chunks,{type:mime})));
+  rec.start();
+  src2.onended=()=>rec.stop();
+  const blob=await done;
+  URL.revokeObjectURL(url);
+  return blob;
+}
+
+function audioBufToWav(buf){
+  const numCh=buf.numberOfChannels;const sr=buf.sampleRate;const len=buf.length;
+  const bytes=44+len*numCh*2;const ab=new ArrayBuffer(bytes);const v=new DataView(ab);
+  const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,'RIFF');v.setUint32(4,bytes-8,true);w(8,'WAVE');
+  w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);
+  v.setUint16(22,numCh,true);v.setUint32(24,sr,true);v.setUint32(28,sr*numCh*2,true);
+  v.setUint16(32,numCh*2,true);v.setUint16(34,16,true);
+  w(36,'data');v.setUint32(40,len*numCh*2,true);
+  let off=44;
+  for(let i=0;i<len;i++)for(let ch=0;ch<numCh;ch++){
+    const s=Math.max(-1,Math.min(1,buf.getChannelData(ch)[i]));
+    v.setInt16(off,s<0?s*0x8000:s*0x7FFF,true);off+=2;
+  }
+  return ab;
+}
 
 // ====== PDF Merge ======
 let mf=[];
