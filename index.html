@@ -33,7 +33,7 @@ async function ensureDocx(){
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -744,73 +744,71 @@ async function csv2html(f){const t=await rd(f);const wb=XLSX.read(t,{type:'strin
 // ====== Video Engine (FFmpeg.wasm) ======
 let ffmpegInstance=null;
 async function getFFmpeg(){
-  if(ffmpegInstance&&ffmpegInstance.loaded)return ffmpegInstance;
+  if(ffmpegInstance&&ffmpegInstance.isLoaded())return ffmpegInstance;
   $('progD').textContent='正在加载 FFmpeg 引擎 (首次约 15 秒)...';
-  const{FFmpeg}=globalThis.FFmpeg || window;
-  const ff=new FFmpeg();
-  ff.on('progress',({progress})=>{
-    $('progD').textContent=`正在转码... ${Math.round(progress*100)}%`;
+  const{createFFmpeg,fetchFile}=FFmpeg;
+  const ff=createFFmpeg({
+    log:true,
+    progress:({ratio})=>{
+      $('progD').textContent=`正在转码... ${Math.min(Math.round(ratio*100),99)}%`;
+    }
   });
-  ff.on('log',({message})=>{console.log('[ffmpeg]',message)});
-  await ff.load({
-    coreURL:'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
-    wasmURL:'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm',
-  });
+  await ff.load();
   ffmpegInstance=ff;
+  window._fetchFile=fetchFile;
   return ff;
 }
 
 async function vid2gif(f){
   const ff=await getFFmpeg();
   $('progD').textContent='正在写入视频文件...';
-  const inputData=new Uint8Array(await f.arrayBuffer());
+  const inputData=await window._fetchFile(f);
   const inName='input.'+ext(f.name);
-  await ff.writeFile(inName,inputData);
+  ff.FS('writeFile',inName,inputData);
 
   $('progD').textContent='正在转码为 GIF...';
   const outName='out.gif';
   const isMobile=window.innerWidth<768;
   const scale=isMobile?'320:-1':'480:-1';
   const fps=isMobile?'8':'10';
-  await ff.exec(['-i',inName,'-vf',`fps=${fps},scale=${scale}:flags=lanczos`,'-loop','0',outName]);
+  await ff.run('-i',inName,'-vf',`fps=${fps},scale=${scale}:flags=lanczos`,'-loop','0',outName);
 
   $('progD').textContent='正在读取 GIF...';
-  const data=await ff.readFile(outName);
-  await ff.deleteFile(inName);await ff.deleteFile(outName);
+  const data=ff.FS('readFile',outName);
+  ff.FS('unlink',inName);ff.FS('unlink',outName);
   return new Blob([data.buffer],{type:'image/gif'});
 }
 
 async function vid2mp4(f){
-  // MP4(H.264) 输出 - 手机可播放
   const ff=await getFFmpeg();
   $('progD').textContent='正在写入视频文件...';
-  const inputData=new Uint8Array(await f.arrayBuffer());
+  const inputData=await window._fetchFile(f);
   const inName='input.'+ext(f.name);
-  await ff.writeFile(inName,inputData);
+  ff.FS('writeFile',inName,inputData);
 
   $('progD').textContent='正在转码为 MP4(H.264)...';
   const outName='output.mp4';
-  await ff.exec(['-i',inName,'-c:v','libx264','-preset','ultrafast','-crf','23','-c:a','aac','-b:a','128k','-movflags','+faststart',outName]);
+  await ff.run('-i',inName,'-c:v','libx264','-preset','ultrafast','-crf','23','-c:a','aac','-b:a','128k','-movflags','+faststart',outName);
 
   $('progD').textContent='正在读取文件...';
-  const data=await ff.readFile(outName);
-  await ff.deleteFile(inName);await ff.deleteFile(outName);
+  const data=ff.FS('readFile',outName);
+  ff.FS('unlink',inName);ff.FS('unlink',outName);
   return new Blob([data.buffer],{type:'video/mp4'});
 }
 
 async function vid2webm(f){
   const ff=await getFFmpeg();
   $('progD').textContent='正在写入视频文件...';
-  const inputData=new Uint8Array(await f.arrayBuffer());
+  const inputData=await window._fetchFile(f);
   const inName='input.'+ext(f.name);
-  await ff.writeFile(inName,inputData);
+  ff.FS('writeFile',inName,inputData);
 
   $('progD').textContent='正在转码为 WebM...';
   const outName='output.webm';
-  await ff.exec(['-i',inName,'-c:v','libvpx','-crf','10','-b:v','1M','-c:a','libvorbis',outName]);
+  await ff.run('-i',inName,'-c:v','libvpx','-crf','10','-b:v','1M','-c:a','libvorbis',outName);
 
-  const data=await ff.readFile(outName);
-  await ff.deleteFile(inName);await ff.deleteFile(outName);
+  const data=ff.FS('readFile',outName);
+  ff.FS('unlink',inName);ff.FS('unlink',outName);
   return new Blob([data.buffer],{type:'video/webm'});
 }
 
