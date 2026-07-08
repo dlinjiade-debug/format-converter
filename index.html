@@ -219,22 +219,27 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
 <body>
 <!-- UnicornStudio 动态背景 (仅桌面端) -->
 <div id="us-bg" data-us-project="HszpeCBkwYw9Wzp8smrN" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;overflow:hidden;display:none"></div>
-<!-- 移动端 CSS 回退背景 -->
+<!-- 背景层 -->
+<div id="bg-layer"></div>
+<!-- UnicornStudio 动态背景 (桌面端) -->
+<div id="us-bg" data-us-project="HszpeCBkwYw9Wzp8smrN" style="display:none"></div>
 <style>
-html{background:#06060b}
-#css-bg{display:none}
+#bg-layer{
+  position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;
+  background:#06060b;
+}
+#us-bg{
+  position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;
+  pointer-events:none;overflow:hidden;
+}
 @media(max-width:767px){
-  html{
+  #bg-layer{
     background:#06060b;
     background-image:
-      radial-gradient(ellipse 60% 50% at 20% 15%,rgba(139,92,246,.18),transparent 70%),
-      radial-gradient(ellipse 50% 45% at 80% 85%,rgba(244,63,94,.12),transparent 70%),
-      radial-gradient(ellipse 45% 40% at 60% 40%,rgba(14,165,233,.08),transparent 70%),
-      radial-gradient(ellipse 35% 30% at 40% 70%,rgba(16,185,129,.06),transparent 70%);
-    background-attachment:fixed;
+      radial-gradient(circle at 25% 20%,rgba(139,92,246,.3),transparent 50%),
+      radial-gradient(circle at 75% 80%,rgba(244,63,94,.2),transparent 50%),
+      radial-gradient(circle at 55% 45%,rgba(14,165,233,.15),transparent 45%);
   }
-  #css-bg{display:none!important}
-  #us-bg{display:none!important}
 }
 </style>
 
@@ -1007,9 +1012,11 @@ function addI(fs){Array.from(fs).forEach(f=>{if(f.type.startsWith('image/'))imf.
 function rI(){$('il').innerHTML=imf.map((f,i)=>{const u=URL.createObjectURL(f);return`<div class="it"><img src="${u}"><button onclick="imf.splice(${i},1);rI()">x</button></div>`}).join('');$('goI').style.display=imf.length?'block':'none'}
 hook($('goI'),'click',async()=>{if(!imf.length)return;$('progI').classList.add('show');$('goI').disabled=true;try{const{jsPDF}=window.jspdf;let doc=null;for(const f of imf){const img=await loadImg(f);const w=img.naturalWidth,h=img.naturalHeight;if(!doc)doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});else doc.addPage([w,h],w>h?'landscape':'portrait');const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h)}show(doc.output('blob'),'图片合并.pdf',$('resI'))}catch(e){$('resI').innerHTML=`<div class="res-err">${e.message}</div>`;$('resI').classList.add('show')}finally{$('progI').classList.remove('show');$('goI').disabled=false}});
 
-// UnicornStudio: 桌面端加载，移动端由 CSS 媒体查询处理
+// UnicornStudio: 桌面端加载
 (function(){
-  if(window.innerWidth<768)return; // 移动端不加载
+  if(window.innerWidth<768)return;
+  const us=document.getElementById('us-bg');
+  if(us)us.style.display='block';
   const s=document.createElement('script');
   s.src='https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v2.2.6/dist/unicornStudio.umd.js';
   s.onload=()=>{if(typeof UnicornStudio!=='undefined')UnicornStudio.init()};
