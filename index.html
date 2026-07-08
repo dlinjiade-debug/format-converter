@@ -46,24 +46,7 @@ async function ensureDocx(){
   --mono:'JetBrains Mono','Consolas',monospace;
 }
 html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
-body{font-family:var(--sans);background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh;overflow-x:hidden}
-
-/* BG */
-.bg{position:fixed;inset:0;pointer-events:none;z-index:0}
-.bg::before{content:'';position:absolute;inset:-20%;
-  background:radial-gradient(ellipse 700px 600px at 25% 15%,rgba(139,92,246,.13),transparent),
-  radial-gradient(ellipse 500px 500px at 75% 85%,rgba(244,63,94,.09),transparent),
-  radial-gradient(ellipse 450px 450px at 55% 45%,rgba(14,165,233,.06),transparent);
-  animation:mesh 22s ease-in-out infinite alternate}
-@keyframes mesh{0%{transform:translate(0,0) scale(1)}50%{transform:translate(-25px,18px) scale(1.04)}100%{transform:translate(15px,-10px) scale(.97)}}
-.bg::after{content:'';position:absolute;inset:0;
-  background:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.025'/%3E%3C/svg%3E");
-  opacity:.6}
-.orb{position:absolute;border-radius:50%;filter:blur(100px);animation:float 28s ease-in-out infinite}
-.orb.a{width:500px;height:500px;background:rgba(139,92,246,.12);top:-8%;left:8%}
-.orb.b{width:420px;height:420px;background:rgba(244,63,94,.1);bottom:5%;right:5%;animation-delay:-10s}
-.orb.c{width:360px;height:360px;background:rgba(14,165,233,.08);top:35%;left:55%;animation-delay:-18s}
-@keyframes float{0%,100%{transform:translate(0,0)}25%{transform:translate(35px,-25px)}50%{transform:translate(-18px,35px)}75%{transform:translate(25px,15px)}}
+body{font-family:var(--sans);background:#06060b;color:var(--text);line-height:1.6;min-height:100vh;overflow-x:hidden}
 
 /* Layout */
 .page{max-width:840px;margin:0 auto;padding:52px 24px 80px;position:relative;z-index:1}
@@ -84,9 +67,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);line-height:
 .stat-lbl{font:500 10px/1 var(--sans);color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
 
 /* Card */
-.card{background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:var(--r2);
+.card{background:rgba(6,6,11,.75);border:1px solid var(--border);border-radius:var(--r2);
   box-shadow:0 8px 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.04);overflow:hidden;
-  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+  backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px)}
 
 /* Tabs */
 .tabs{display:flex;padding:6px;gap:4px;border-bottom:1px solid var(--border)}
@@ -229,7 +212,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);line-height:
 </style>
 </head>
 <body>
-<div class="bg"><div class="orb a"></div><div class="orb b"></div><div class="orb c"></div></div>
+<!-- UnicornStudio 动态背景 -->
+<div data-us-project="HszpeCBkwYw9Wzp8smrN" data-us-production="true" style="position:fixed;inset:0;z-index:0;pointer-events:none"></div>
 
 <div class="page">
   <div class="hero anim">
@@ -722,6 +706,9 @@ hook($('fiI'),'change',()=>addI($('fiI').files));
 function addI(fs){Array.from(fs).forEach(f=>{if(f.type.startsWith('image/'))imf.push(f)});rI()}
 function rI(){$('il').innerHTML=imf.map((f,i)=>{const u=URL.createObjectURL(f);return`<div class="it"><img src="${u}"><button onclick="imf.splice(${i},1);rI()">x</button></div>`}).join('');$('goI').style.display=imf.length?'block':'none'}
 hook($('goI'),'click',async()=>{if(!imf.length)return;$('progI').classList.add('show');$('goI').disabled=true;try{const{jsPDF}=window.jspdf;let doc=null;for(const f of imf){const img=await loadImg(f);const w=img.naturalWidth,h=img.naturalHeight;if(!doc)doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});else doc.addPage([w,h],w>h?'landscape':'portrait');const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h)}show(doc.output('blob'),'图片合并.pdf',$('resI'))}catch(e){$('resI').innerHTML=`<div class="res-err">${e.message}</div>`;$('resI').classList.add('show')}finally{$('progI').classList.remove('show');$('goI').disabled=false}});
+
+// UnicornStudio 背景初始化
 </script>
+<script src="https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v2.2.6/dist/unicornStudio.umd.js" defer></script>
 </body>
 </html>
