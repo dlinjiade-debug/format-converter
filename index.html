@@ -353,13 +353,13 @@ const R={
   gif:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'webp',n:'WebP'},{f:'pdf',n:'PDF'}],
   svg:[{f:'png',n:'PNG'},{f:'jpg',n:'JPG'},{f:'pdf',n:'PDF'}],
   // Video
-  mp4:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM'}],
-  mov:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4'}],
-  avi:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4'}],
-  mkv:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4'}],
-  webm:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4'}],
-  wmv:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4'}],
-  flv:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4'}],
+  mp4:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM 视频'}],
+  mov:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM 视频'}],
+  avi:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM 视频'}],
+  mkv:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM 视频'}],
+  webm:[{f:'gif',n:'GIF 动图'},{f:'mp4',n:'MP4 视频'}],
+  wmv:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM 视频'}],
+  flv:[{f:'gif',n:'GIF 动图'},{f:'webm',n:'WebM 视频'}],
   // Audio
   mp3:[{f:'wav',n:'WAV'},{f:'ogg',n:'OGG'}],
   wav:[{f:'mp3',n:'MP3'},{f:'ogg',n:'OGG'}],
@@ -410,7 +410,7 @@ hook($('go'),'click',async()=>{
   $('progT').textContent='正在转换...';$('progD').textContent='';$('res').classList.remove('show');
   try{
     const e=ext(sf.name),k=e+'->'+st;
-    let blob,out=sf.name.replace(/\.[^.]+$/,'')+'.'+st;
+    let blob,out;
 
     $('progD').textContent='正在解析文件...';
 
@@ -452,7 +452,7 @@ hook($('go'),'click',async()=>{
     // === Video ===
     else if(k==='mp4->gif'||k==='mov->gif'||k==='avi->gif'||k==='mkv->gif'||k==='webm->gif'||k==='wmv->gif'||k==='flv->gif')blob=await vid2gif(sf);
     else if(k==='mov->mp4'||k==='avi->mp4'||k==='mkv->mp4'||k==='webm->mp4'||k==='wmv->mp4'||k==='flv->mp4')blob=await vid2mp4(sf);
-    else if(k==='mp4->webm')blob=await vid2webm(sf);
+    else if(k==='mp4->webm')blob=await vid2mp4(sf); // 同样用 MediaRecorder
     // === Audio ===
     else if(k==='mp3->wav'||k==='ogg->wav'||k==='aac->wav'||k==='flac->wav')blob=await audConvert(sf,'wav');
     else if(k==='wav->mp3'||k==='ogg->mp3'||k==='aac->mp3'||k==='flac->mp3')blob=await audConvert(sf,'mp3');
@@ -460,6 +460,8 @@ hook($('go'),'click',async()=>{
     else throw new Error('不支持此转换: '+k);
 
     $('bar').className='bar done';$('progT').textContent='转换完成';
+    // 输出文件名: 优先用 blob._ext (视频转码可能改扩展名)
+    out=sf.name.replace(/\.[^.]+$/,'')+'.'+(blob._ext||st);
     show(blob,out,$('res'));
   }catch(err){
     $('bar').className='bar err';$('progT').textContent='转换失败';
@@ -915,8 +917,9 @@ async function vid2mp4(f){
   }catch(e){}
 
   // 选择最佳支持的编码格式
-  const types=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+  const types=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
   const mime=types.find(t=>MediaRecorder.isTypeSupported(t))||'video/webm';
+  const outExt=mime.includes('webm')?'webm':'mp4';
 
   const chunks=[];
   const rec=new MediaRecorder(stream,{mimeType:mime});
@@ -931,6 +934,8 @@ async function vid2mp4(f){
   rec.stop();
   const blob=await done;
   URL.revokeObjectURL(url);
+  // 返回 blob 和实际扩展名
+  blob._ext=outExt;
   return blob;
 }
 
