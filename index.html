@@ -217,8 +217,15 @@ body{font-family:var(--sans);background:#06060b;color:var(--text);line-height:1.
 </style>
 </head>
 <body>
-<!-- UnicornStudio 动态背景 -->
-<div id="us-bg" data-us-project="HszpeCBkwYw9Wzp8smrN" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;overflow:hidden"></div>
+<!-- UnicornStudio 动态背景 (仅桌面端) -->
+<div id="us-bg" data-us-project="HszpeCBkwYw9Wzp8smrN" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;overflow:hidden;display:none"></div>
+<!-- 移动端 CSS 回退背景 -->
+<div id="css-bg" style="position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden">
+  <div style="position:absolute;width:500px;height:500px;border-radius:50%;filter:blur(100px);background:rgba(139,92,246,.15);top:-8%;left:8%;animation:f1 28s ease-in-out infinite"></div>
+  <div style="position:absolute;width:420px;height:420px;border-radius:50%;filter:blur(100px);background:rgba(244,63,94,.1);bottom:5%;right:5%;animation:f1 28s ease-in-out infinite reverse"></div>
+  <div style="position:absolute;width:360px;height:360px;border-radius:50%;filter:blur(100px);background:rgba(14,165,233,.08);top:35%;left:55%;animation:f1 28s ease-in-out 5s infinite"></div>
+</div>
+<style>@keyframes f1{0%,100%{transform:translate(0,0)}25%{transform:translate(35px,-25px)}50%{transform:translate(-18px,35px)}75%{transform:translate(25px,15px)}}</style>
 
 <div class="page">
   <div class="hero anim">
@@ -885,10 +892,23 @@ function addI(fs){Array.from(fs).forEach(f=>{if(f.type.startsWith('image/'))imf.
 function rI(){$('il').innerHTML=imf.map((f,i)=>{const u=URL.createObjectURL(f);return`<div class="it"><img src="${u}"><button onclick="imf.splice(${i},1);rI()">x</button></div>`}).join('');$('goI').style.display=imf.length?'block':'none'}
 hook($('goI'),'click',async()=>{if(!imf.length)return;$('progI').classList.add('show');$('goI').disabled=true;try{const{jsPDF}=window.jspdf;let doc=null;for(const f of imf){const img=await loadImg(f);const w=img.naturalWidth,h=img.naturalHeight;if(!doc)doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});else doc.addPage([w,h],w>h?'landscape':'portrait');const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h)}show(doc.output('blob'),'图片合并.pdf',$('resI'))}catch(e){$('resI').innerHTML=`<div class="res-err">${e.message}</div>`;$('resI').classList.add('show')}finally{$('progI').classList.remove('show');$('goI').disabled=false}});
 
-// UnicornStudio 背景初始化
-if(typeof UnicornStudio!=='undefined'){UnicornStudio.init()}
+// UnicornStudio: 仅桌面端加载，移动端用 CSS 回退
+(function(){
+  const isMobile=window.innerWidth<768||/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if(isMobile){
+    // 移动端：隐藏 UnicornStudio，显示 CSS 背景
+    const us=document.getElementById('us-bg');if(us)us.remove();
+    return;
+  }
+  // 桌面端：显示 UnicornStudio，隐藏 CSS 背景
+  const us=document.getElementById('us-bg');if(us)us.style.display='block';
+  const css=document.getElementById('css-bg');if(css)css.style.display='none';
+  const s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v2.2.6/dist/unicornStudio.umd.js';
+  s.onload=()=>{if(typeof UnicornStudio!=='undefined')UnicornStudio.init()};
+  s.onerror=()=>{if(us)us.style.display='none';if(css)css.style.display='block'};
+  document.body.appendChild(s);
+})();
 </script>
-<script src="https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v2.2.6/dist/unicornStudio.umd.js"></script>
-<script>setTimeout(()=>{if(typeof UnicornStudio!=='undefined')UnicornStudio.init()},500)</script>
 </body>
 </html>
