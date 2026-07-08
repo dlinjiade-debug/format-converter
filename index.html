@@ -443,30 +443,43 @@ function show(blob,name,c){
 }
 
 // ====== PDF Engine ======
-async function pdfPages(f){
-  $('progD').textContent='正在加载 PDF 引擎...';
-  if(typeof pdfjsLib==='undefined'){
-    // 尝试动态加载
-    await new Promise((ok,no)=>{
-      const s=document.createElement('script');
-      s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-      s.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';ok()};
-      s.onerror=()=>no(new Error('PDF 引擎加载失败，请检查网络'));
-      document.head.appendChild(s);
-    });
-  }
-  if(!pdfjsLib)throw new Error('PDF 引擎不可用');
-  $('progD').textContent='正在读取 PDF 文件...';
+async function loadPdfJs(){
+  if(typeof pdfjsLib!=='undefined')return pdfjsLib;
+  // 动态加载
+  await new Promise((ok,no)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=ok;s.onerror=()=>no(new Error('PDF 引擎加载失败，请检查网络'));
+    document.head.appendChild(s);
+  });
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  return pdfjsLib;
+}
+
+async function openPdf(f){
+  const lib=await loadPdfJs();
   const buf=await f.arrayBuffer();
-  let doc;
   try{
-    doc=await pdfjsLib.getDocument({data:buf,useWorkerFetch:false,isEvalSupported:false}).promise;
+    return await lib.getDocument({data:buf,useWorkerFetch:false,isEvalSupported:false}).promise;
   }catch(e){
-    // worker 失败则禁用 worker 重试
-    $('progD').textContent='Worker 加载失败，使用主线程重试...';
-    pdfjsLib.GlobalWorkerOptions.workerSrc='';
-    doc=await pdfjsLib.getDocument({data:buf,disableAutoFetch:true}).promise;
+    // worker 失败重试
+    lib.GlobalWorkerOptions.workerSrc='';
+    return await lib.getDocument({data:buf}).promise;
   }
+}
+
+// 渲染某页为 canvas (用于图片回退)
+async function renderPage(doc,pageNum,scale){
+  const pg=await doc.getPage(pageNum);
+  const vp=pg.getViewport({scale:scale||1.5});
+  const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;
+  await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+  return c;
+}
+
+async function pdfPages(f){
+  $('progD').textContent='正在打开 PDF...';
+  const doc=await openPdf(f);
   const pages=[];
   const total=doc.numPages;
   for(let i=1;i<=total;i++){
@@ -474,87 +487,131 @@ async function pdfPages(f){
     try{
       const pg=await doc.getPage(i);
       const tc=await pg.getTextContent();
-      const items=tc.items;
-      if(!items||!items.length){pages.push({text:'',items:[]});continue}
-      // 按 Y 坐标分组行，保留布局
-      const lines=[];let curLine=[];let lastY=null;
+      const items=tc.items||[];
+      if(!items.length){pages.push({text:'',hasText:false});continue}
+      // 按 Y 坐标分组行
+      const lines=[];let cur=[];let lastY=null;
       items.forEach(item=>{
         if(!item.str)return;
         const y=Math.round(item.transform[5]);
         if(lastY!==null&&Math.abs(y-lastY)>5){
-          lines.push(curLine.sort((a,b)=>a.x-b.x).map(i=>i.str).join(''));
-          curLine=[];
+          lines.push(cur.sort((a,b)=>a.x-b.x).map(j=>j.str).join(''));
+          cur=[];
         }
-        curLine.push({str:item.str,x:item.transform[4],y});
+        cur.push({str:item.str,x:item.transform[4],y});
         lastY=y;
       });
-      if(curLine.length)lines.push(curLine.sort((a,b)=>a.x-b.x).map(i=>i.str).join(''));
-      pages.push({text:lines.join('\n'),items});
+      if(cur.length)lines.push(cur.sort((a,b)=>a.x-b.x).map(j=>j.str).join(''));
+      const text=lines.join('\n').trim();
+      pages.push({text,hasText:!!text});
     }catch(e){
-      console.warn(`Page ${i} failed:`,e);
-      pages.push({text:`[第 ${i} 页读取失败]`,items:[]});
+      console.warn(`Page ${i}:`,e);
+      pages.push({text:'',hasText:false});
     }
   }
-  doc.destroy();
+  // 不 destroy doc, 后面可能还要渲染图片
+  pages._doc=doc;
   return pages;
 }
 
 async function pdf2txt(f){
   const pages=await pdfPages(f);
-  return new Blob([pages.map(p=>p.text).join('\n\n')],{type:'text/plain;charset=utf-8'});
+  const text=pages.map(p=>p.text).filter(Boolean).join('\n\n');
+  if(!text)throw new Error('PDF 中没有可提取的文字（可能是扫描件/图片型 PDF）');
+  return new Blob([text],{type:'text/plain;charset=utf-8'});
 }
 
 async function pdf2docx(f){
   await ensureDocx();
-  $('progD').textContent='正在提取 PDF 文本...';
+  $('progD').textContent='正在解析 PDF...';
   const pages=await pdfPages(f);
   $('progD').textContent='正在生成 Word 文档...';
-  const{Document,Packer,Paragraph,TextRun,HeadingLevel,AlignmentType,BorderStyle}=docx;
+  const{Document,Packer,Paragraph,TextRun,HeadingLevel,AlignmentType,ImageRun}=docx;
   const children=[];
+  let hasAnyContent=false;
 
-  pages.forEach((pg,pi)=>{
-    if(pages.length>1&&pg.text.trim()){
+  for(let pi=0;pi<pages.length;pi++){
+    const pg=pages[pi];
+
+    // 页码标题
+    if(pages.length>1){
       children.push(new Paragraph({
         text:`— 第 ${pi+1} 页 —`,
         heading:HeadingLevel.HEADING_2,
         alignment:AlignmentType.CENTER,
-        spacing:{before:pi>0?400:200,after:200},
+        spacing:{before:pi>0?400:100,after:200},
       }));
     }
-    const lines=pg.text.split('\n');
-    lines.forEach(line=>{
-      const t=line.trim();
-      if(!t)return;
-      // 检测标题（全大写、短行、或以数字开头的章节）
-      const isHeading=t.length<60&&(t===t.toUpperCase()||/^\d+[\.\、]/.test(t)||/^第[一二三四五六七八九十\d]+[章节课]/.test(t));
-      if(isHeading){
+
+    if(pg.hasText){
+      // 有文字：提取文字
+      hasAnyContent=true;
+      const lines=pg.text.split('\n');
+      lines.forEach(line=>{
+        const t=line.trim();
+        if(!t)return;
+        const isHeading=t.length<50&&(t===t.toUpperCase()||/^\d+[\.\、]/.test(t)||/^第[一二三四五六七八九十\d]+[章节课]/.test(t));
+        if(isHeading){
+          children.push(new Paragraph({text:t,heading:HeadingLevel.HEADING_3,spacing:{before:160,after:80}}));
+        }else{
+          children.push(new Paragraph({
+            children:[new TextRun({text:t,size:24,font:'Microsoft YaHei'})],
+            spacing:{after:80,line:360}
+          }));
+        }
+      });
+    }else{
+      // 无文字（扫描件）：渲染为图片嵌入
+      $('progD').textContent=`正在渲染第 ${pi+1} 页为图片...`;
+      try{
+        const canvas=await renderPage(pages._doc,pi+1,2);
+        const dataUrl=canvas.toDataURL('image/jpeg',0.92);
+        const base64=dataUrl.split(',')[1];
+        const imgBytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+        const imgW=Math.round(canvas.width/2); // 转换为 docx 的 EMU 单位 (1/914400 inch)
+        const imgH=Math.round(canvas.height/2);
+        // 适配 A4 宽度 (大约 6 英寸 = 5486400 EMU)
+        const maxW=5486400;
+        const ratio=maxW/(imgW*914400/72);
+        const finalW=Math.round(imgW*914400/72);
+        const finalH=Math.round(imgH*914400/72);
+        const scale=finalW>maxW?maxW/finalW:1;
+
         children.push(new Paragraph({
-          text:t,heading:HeadingLevel.HEADING_3,
-          spacing:{before:160,after:80}
+          children:[new ImageRun({
+            data:imgBytes,
+            transformation:{width:Math.round(finalW*scale/914400*72),height:Math.round(finalH*scale/914400*72)},
+            type:'jpg'
+          })],
+          alignment:AlignmentType.CENTER,
+          spacing:{after:200}
         }));
-      }else{
+        hasAnyContent=true;
+      }catch(e){
+        console.warn('Page render failed:',e);
         children.push(new Paragraph({
-          children:[new TextRun({text:t,size:24,font:'Microsoft YaHei'})],
-          spacing:{after:80,line:360}
+          children:[new TextRun({text:`[第 ${pi+1} 页 - 扫描图片，无法提取文字]`,size:22,color:'999999',italics:true})],
+          spacing:{after:80}
         }));
       }
-    });
-  });
+    }
+  }
 
-  if(!children.length)children.push(new Paragraph({children:[new TextRun({text:'（PDF 无可提取文本）',size:24})]}));
-  const doc=new Document({
-    sections:[{
-      properties:{page:{margin:{top:1440,right:1440,bottom:1440,left:1440}}},
-      children
-    }]
-  });
+  // 关闭 PDF
+  if(pages._doc)try{pages._doc.destroy()}catch(e){}
+
+  if(!hasAnyContent)throw new Error('PDF 中没有可读取的内容');
+  const doc=new Document({sections:[{properties:{page:{margin:{top:1440,right:1440,bottom:1440,left:1440}}},children}]});
   return Packer.toBlob(doc);
 }
 
 async function pdf2html(f){
   const pages=await pdfPages(f);
   const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const hasText=pages.some(p=>p.hasText);
+  if(!hasText)throw new Error('PDF 中没有可提取的文字（可能是扫描件）');
   const body=pages.map((pg,i)=>`<section style="margin:24px auto;max-width:800px;padding:36px 40px;background:#fff;border:1px solid #e5e5e5;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.04)"><pre style="white-space:pre-wrap;font-family:Georgia,'Noto Serif SC',serif;line-height:1.9;font-size:15px;color:#1a1a1a">${esc(pg.text)}</pre>${pages.length>1?`<div style="text-align:center;color:#bbb;font-size:12px;margin-top:20px;padding-top:16px;border-top:1px solid #f0f0f0">第 ${i+1} 页</div>`:''}</section>`).join('\n');
+  if(pages._doc)try{pages._doc.destroy()}catch(e){}
   return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${f.name}</title><style>*{margin:0;box-sizing:border-box}body{background:#f7f7f5;padding:24px 16px;font-family:system-ui,sans-serif}</style></head><body>${body}</body></html>`],{type:'text/html;charset=utf-8'});
 }
 
