@@ -876,25 +876,29 @@ function addI(fs){Array.from(fs).forEach(f=>{if(f.type.startsWith('image/'))imf.
 function rI(){$('il').innerHTML=imf.map((f,i)=>{const u=URL.createObjectURL(f);return`<div class="it"><img src="${u}"><button onclick="imf.splice(${i},1);rI()">x</button></div>`}).join('');$('goI').style.display=imf.length?'block':'none'}
 hook($('goI'),'click',async()=>{if(!imf.length)return;$('progI').classList.add('show');$('goI').disabled=true;try{const{jsPDF}=window.jspdf;let doc=null;for(const f of imf){const img=await loadImg(f);const w=img.naturalWidth,h=img.naturalHeight;if(!doc)doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});else doc.addPage([w,h],w>h?'landscape':'portrait');const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h)}show(doc.output('blob'),'图片合并.pdf',$('resI'))}catch(e){$('resI').innerHTML=`<div class="res-err">${e.message}</div>`;$('resI').classList.add('show')}finally{$('progI').classList.remove('show');$('goI').disabled=false}});
 
-// Strands WebGL 动态背景
+// Strands WebGL 动态背景 (纯 WebGL2, 无外部依赖)
 (function(){
   const ctn=document.getElementById('us-bg');
   if(!ctn)return;
+
+  const canvas=document.createElement('canvas');
+  canvas.style.cssText='width:100%;height:100%;display:block';
+  const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true});
+  if(!gl){ctn.style.display='none';return;}
   ctn.style.display='block';
+  ctn.appendChild(canvas);
+
   const isMobile=window.innerWidth<768;
-  let loaded=false,raf=0;
+  const MAX_STRANDS=12,MAX_COLORS=8;
 
-  function start(){
-    if(!window.OGL||loaded)return;
-    loaded=true;
-    const{Renderer,Program,Mesh,Color,Triangle}=OGL;
+  const VERT=`#version 300 es
+void main(){
+  float x=float((gl_VertexID&1)<<2)-1.0;
+  float y=float((gl_VertexID&2)<<1)-1.0;
+  gl_Position=vec4(x,y,0.0,1.0);
+}`;
 
-    const MAX_STRANDS=12,MAX_COLORS=8;
-    const VERT=`#version 300 es
-in vec2 position;
-void main(){gl_Position=vec4(position,0.0,1.0);}`;
-
-    const FRAG=`#version 300 es
+  const FRAG=`#version 300 es
 precision highp float;
 uniform float uTime;
 uniform vec2 uResolution;
@@ -909,9 +913,9 @@ vec3 samplePalette(float t){
   float scaled=t*float(uColorCount);
   int idx=int(floor(scaled));
   float blend=fract(scaled);
-  int nextIdx=idx+1;
-  if(nextIdx>=uColorCount)nextIdx=0;
-  return mix(uColors[idx],uColors[nextIdx],blend);
+  int nxt=idx+1;
+  if(nxt>=uColorCount)nxt=0;
+  return mix(uColors[idx],uColors[nxt],blend);
 }
 vec3 strandColor(float t){
   if(uColorCount>0)return samplePalette(t);
@@ -947,51 +951,78 @@ void main(){
   fragColor=vec4(col*uOpacity,clamp(lum,0.0,1.0)*uOpacity);
 }`;
 
-    const renderer=new Renderer({alpha:true,antialias:false});
-    const gl=renderer.gl;
-    gl.clearColor(0,0,0,0);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
-
-    const geo=new Triangle(gl);
-    const colors=['#8b5cf6','#a78bfa','#0ea5e9','#f43f5e'];
-    const cArr=[];
-    colors.forEach(h=>{const c=new Color(h);cArr.push(c.r,c.g,c.b)});
-    while(cArr.length<MAX_COLORS*3)cArr.push(cArr[cArr.length-3]||1,cArr[cArr.length-2]||1,cArr[cArr.length-1]||1);
-
-    const prog=new Program(gl,{vertex:VERT,fragment:FRAG,uniforms:{
-      uTime:{value:0},uResolution:{value:[ctn.offsetWidth,ctn.offsetHeight]},
-      uColors:{value:cArr},uColorCount:{value:Math.min(colors.length,MAX_COLORS)},
-      uStrandCount:{value:isMobile?2:3},uSpeed:{value:.3},uAmplitude:{value:.7},
-      uWaviness:{value:1},uThickness:{value:.6},uGlow:{value:2.2},uTaper:{value:3},
-      uSpread:{value:1},uHueShift:{value:0},uIntensity:{value:.5},uOpacity:{value:.7},
-      uScale:{value:1.5},uSaturation:{value:1.3}
-    }});
-    const mesh=new Mesh(gl,{geometry:geo,program:prog});
-    ctn.appendChild(gl.canvas);
-    gl.canvas.style.cssText='width:100%;height:100%;display:block';
-
-    function resize(){
-      if(!ctn)return;
-      const w=ctn.offsetWidth,h=ctn.offsetHeight;
-      renderer.setSize(w,h);
-      prog.uniforms.uResolution.value=[w,h];
+  function mkShader(type,src){
+    const s=gl.createShader(type);
+    gl.shaderSource(s,src);
+    gl.compileShader(s);
+    if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){
+      console.warn('Shader error:',gl.getShaderInfoLog(s));
+      gl.deleteShader(s);return null;
     }
-    window.addEventListener('resize',resize);
-    resize();
-
-    const update=t=>{
-      raf=requestAnimationFrame(update);
-      prog.uniforms.uTime.value=t*0.001;
-      renderer.render({scene:mesh});
-    };
-    raf=requestAnimationFrame(update);
+    return s;
   }
 
-  const s=document.createElement('script');
-  s.src='https://cdn.jsdelivr.net/npm/ogl@1.0.11/dist/ogl.umd.js';
-  s.onload=start;
-  document.body.appendChild(s);
+  const vs=mkShader(gl.VERTEX_SHADER,VERT);
+  const fs=mkShader(gl.FRAGMENT_SHADER,FRAG);
+  if(!vs||!fs)return;
+
+  const prog=gl.createProgram();
+  gl.attachShader(prog,vs);gl.attachShader(prog,fs);
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS)){console.warn('Link error:',gl.getProgramInfoLog(prog));return;}
+  gl.useProgram(prog);
+
+  const U=name=>gl.getUniformLocation(prog,name);
+  const loc={};
+  ['uTime','uResolution','uColors','uColorCount','uStrandCount','uSpeed','uAmplitude','uWaviness',
+   'uThickness','uGlow','uTaper','uSpread','uHueShift','uIntensity','uOpacity','uScale','uSaturation'
+  ].forEach(n=>loc[n]=U(n));
+
+  const colors=['#8b5cf6','#a78bfa','#0ea5e9','#f43f5e'];
+  const cArr=[];
+  colors.forEach(h=>{
+    const rgb=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h);
+    if(rgb)cArr.push(parseInt(rgb[1],16)/255,parseInt(rgb[2],16)/255,parseInt(rgb[3],16)/255);
+  });
+  while(cArr.length<MAX_COLORS*3)cArr.push(cArr[cArr.length-3]||0,cArr[cArr.length-2]||0,cArr[cArr.length-1]||0);
+
+  const vao=gl.createVertexArray();
+  gl.bindVertexArray(vao);
+
+  gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+  gl.enable(gl.BLEND);
+
+  function resize(){
+    const w=ctn.offsetWidth,h=ctn.offsetHeight;
+    canvas.width=w;canvas.height=h;
+    gl.viewport(0,0,w,h);
+    gl.uniform2f(loc.uResolution,w,h);
+  }
+  window.addEventListener('resize',resize);
+  resize();
+
+  gl.uniform3fv(loc.uColors,cArr);
+  gl.uniform1i(loc.uColorCount,Math.min(colors.length,MAX_COLORS));
+  gl.uniform1i(loc.uStrandCount,isMobile?2:3);
+  gl.uniform1f(loc.uSpeed,.3);
+  gl.uniform1f(loc.uAmplitude,.7);
+  gl.uniform1f(loc.uWaviness,1);
+  gl.uniform1f(loc.uThickness,.6);
+  gl.uniform1f(loc.uGlow,2.2);
+  gl.uniform1f(loc.uTaper,3);
+  gl.uniform1f(loc.uSpread,1);
+  gl.uniform1f(loc.uHueShift,0);
+  gl.uniform1f(loc.uIntensity,.5);
+  gl.uniform1f(loc.uOpacity,.7);
+  gl.uniform1f(loc.uScale,1.5);
+  gl.uniform1f(loc.uSaturation,1.3);
+
+  function render(t){
+    requestAnimationFrame(render);
+    gl.uniform1f(loc.uTime,t*.001);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+  }
+  requestAnimationFrame(render);
 })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
