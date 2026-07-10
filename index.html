@@ -32,8 +32,8 @@ async function ensureDocx(){
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -220,10 +220,7 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
 <body>
 <!-- UnicornStudio 动态背景 (仅桌面端) -->
 <div id="us-bg" data-us-project="HszpeCBkwYw9Wzp8smrN" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;overflow:hidden;display:none"></div>
-<!-- 背景层 -->
 <div id="bg-layer"></div>
-<!-- UnicornStudio 动态背景 (桌面端) -->
-<div id="us-bg" data-us-project="HszpeCBkwYw9Wzp8smrN" style="display:none"></div>
 <style>
 #bg-layer{
   position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;
@@ -319,7 +316,9 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
     <span class="tag">PDF → Text</span><span class="tag">Markdown → PDF</span><span class="tag">HTML → PDF</span>
     <span class="tag">图片互转</span><span class="tag">图片 → PDF</span><span class="tag">Excel ↔ CSV</span>
     <span class="tag">PDF 合并</span><span class="tag">PPT → PDF</span><span class="tag">MD → Word</span>
-    <span class="tag">MP4 → GIF</span><span class="tag">视频格式转换</span><span class="tag">音频格式转换</span>
+    <span class="tag">MP4 → GIF</span><span class="tag">MOV → MP4</span><span class="tag">AVI → MP4</span>
+    <span class="tag">MP4 → WebM</span><span class="tag">MKV → MP4</span><span class="tag">MP3 → WAV</span>
+    <span class="tag">WAV → MP3</span><span class="tag">FLAC → WAV</span><span class="tag">视频转 GIF</span>
   </div>
   <div class="foot anim" style="animation-delay:.3s">
     <p>All conversions happen locally in your browser.<br>Files never leave your machine.</p>
@@ -728,7 +727,7 @@ async function html2md(f){const h=await rd(f);const d=document.createElement('di
 async function html2docx(f){await ensureDocx();const h=await rd(f);const d=document.createElement('div');d.innerHTML=h;const{Document,Packer,Paragraph,TextRun,HeadingLevel}=docx;const ch=[];d.querySelectorAll('h1,h2,h3,h4,p,li,td,th').forEach(el=>{const t=el.textContent.trim();if(!t)return;let hd;if(el.tagName==='H1')hd=HeadingLevel.HEADING_1;else if(el.tagName==='H2')hd=HeadingLevel.HEADING_2;else if(el.tagName==='H3')hd=HeadingLevel.HEADING_3;if(hd)ch.push(new Paragraph({text:t,heading:hd}));else ch.push(new Paragraph({children:[new TextRun({text:t,size:22})]}))});if(!ch.length)ch.push(new Paragraph({text:d.textContent||''}));return Packer.toBlob(new Document({sections:[{children:ch}]}))}
 async function txt2pdf(f){const t=await rd(f);const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});const ls=doc.splitTextToSize(t,180);doc.setFontSize(11);let y=20;ls.forEach(l=>{if(y>277){doc.addPage();y=20}doc.text(l,15,y);y+=6});return doc.output('blob')}
 async function txt2docx(f){await ensureDocx();const t=await rd(f);const{Document,Packer,Paragraph,TextRun}=docx;return Packer.toBlob(new Document({sections:[{children:t.split('\n').map(l=>new Paragraph({children:[new TextRun({text:l,size:22})]}))}]}))}
-async function img2img(f,tf){const img=await loadImg(f);const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;const ctx=c.getContext('2d');if(['jpg','jpeg','bmp'].includes(tf)){ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height)}ctx.drawImage(img,0,0);const m={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',bmp:'image/bmp',ico:'image/x-icon'};return new Promise(r=>c.toBlob(r,m[tf]||'image/png',tf==='webp'?.92:.95))}
+async function img2img(f,tf){const img=await loadImg(f);const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;const ctx=c.getContext('2d');if(['jpg','jpeg','bmp'].includes(tf)){ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height)}ctx.drawImage(img,0,0);if(tf==='bmp'){const dataUrl=c.toDataURL('image/png');const res=await fetch(dataUrl);return res.blob()}const m={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',ico:'image/x-icon'};return new Promise(r=>c.toBlob(r,m[tf]||'image/png',tf==='webp'?.92:.95))}
 async function svg2img(f,tf){const s=await rd(f);const b=new Blob([s],{type:'image/svg+xml'});const img=await loadImg(b);const c=document.createElement('canvas');c.width=img.naturalWidth||800;c.height=img.naturalHeight||600;c.getContext('2d').drawImage(img,0,0);if(tf==='pdf')return c2pdf(c);return new Promise(r=>c.toBlob(r,{png:'image/png',jpg:'image/jpeg'}[tf]||'image/png',.95))}
 async function svg2pdf(f){return svg2img(f,'pdf')}
 function loadImg(b){return new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=URL.createObjectURL(b)})}
@@ -749,6 +748,7 @@ async function getFFmpeg(){
   const{createFFmpeg,fetchFile}=FFmpeg;
   const ff=createFFmpeg({
     log:true,
+    corePath:'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
     progress:({ratio})=>{
       $('progD').textContent=`正在转码... ${Math.min(Math.round(ratio*100),99)}%`;
     }
@@ -771,11 +771,13 @@ async function vid2gif(f){
   const isMobile=window.innerWidth<768;
   const scale=isMobile?'320:-1':'480:-1';
   const fps=isMobile?'8':'10';
-  await ff.run('-i',inName,'-vf',`fps=${fps},scale=${scale}:flags=lanczos`,'-loop','0',outName);
+  const filter=`fps=${fps},scale=${scale}:flags=lanczos`;
+  await ff.run('-i',inName,'-vf',`${filter},palettegen=stats_mode=diff`,'-loop','0','palette.png');
+  await ff.run('-i',inName,'-i','palette.png','-lavfi',`${filter} [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=5`,'-loop','0',outName);
 
   $('progD').textContent='正在读取 GIF...';
   const data=ff.FS('readFile',outName);
-  ff.FS('unlink',inName);ff.FS('unlink',outName);
+  ff.FS('unlink',inName);ff.FS('unlink','palette.png');ff.FS('unlink',outName);
   return new Blob([data.buffer],{type:'image/gif'});
 }
 
@@ -841,7 +843,7 @@ async function audConvert(f,targetFmt){
   const src2=ctx.createBufferSource();src2.buffer=rendered;src2.connect(dest);src2.start();
   const chunks=[];
   const mime=targetFmt==='mp3'?'audio/mpeg':'audio/ogg';
-  const rec=new MediaRecorder(dest.stream,{mimeType:rec.isTypeSupported(mime)?mime:'audio/webm'});
+  const rec=new MediaRecorder(dest.stream,{mimeType:MediaRecorder.isTypeSupported(mime)?mime:'audio/webm'});
   rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
   const done=new Promise(ok=>rec.onstop=()=>ok(new Blob(chunks,{type:mime})));
   rec.start();

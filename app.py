@@ -42,6 +42,18 @@ FORMAT_NAMES = {
     "webp": "WebP 图片",
     "svg": "SVG 矢量图",
     "rtf": "RTF 文档",
+    "mp4": "MP4 视频",
+    "mov": "MOV 视频",
+    "avi": "AVI 视频",
+    "mkv": "MKV 视频",
+    "webm": "WebM 视频",
+    "wmv": "WMV 视频",
+    "flv": "FLV 视频",
+    "mp3": "MP3 音频",
+    "wav": "WAV 音频",
+    "ogg": "OGG 音频",
+    "aac": "AAC 音频",
+    "flac": "FLAC 音频",
 }
 
 # 转换器函数映射
@@ -64,6 +76,8 @@ def _load_converter(func_name: str):
         "images_": "converters.image_converter",
         "excel_": "converters.excel_converter",
         "csv_": "converters.excel_converter",
+        "video_": "converters.video_converter",
+        "audio_": "converters.audio_converter",
     }
 
     module_name = None

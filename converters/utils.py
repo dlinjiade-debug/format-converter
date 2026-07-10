@@ -21,6 +21,8 @@ FORMAT_CATEGORIES = {
     "image": ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "webp", "svg"],
     "web": ["html", "htm"],
     "markup": ["md", "markdown"],
+    "video": ["mp4", "mov", "avi", "mkv", "webm", "wmv", "flv"],
+    "audio": ["mp3", "wav", "ogg", "aac", "flac"],
 }
 
 # 支持的转换路线
@@ -69,6 +71,47 @@ CONVERSION_MAP = {
     # 文本转换
     ("txt", "pdf"): "text_to_pdf",
     ("txt", "docx"): "text_to_word",
+    # 视频转换
+    ("mp4", "gif"): "video_to_gif",
+    ("mp4", "webm"): "video_to_webm",
+    ("mov", "mp4"): "video_to_mp4",
+    ("mov", "gif"): "video_to_gif",
+    ("mov", "webm"): "video_to_webm",
+    ("avi", "mp4"): "video_to_mp4",
+    ("avi", "gif"): "video_to_gif",
+    ("avi", "webm"): "video_to_webm",
+    ("mkv", "mp4"): "video_to_mp4",
+    ("mkv", "gif"): "video_to_gif",
+    ("mkv", "webm"): "video_to_webm",
+    ("webm", "mp4"): "video_to_mp4",
+    ("webm", "gif"): "video_to_gif",
+    ("wmv", "mp4"): "video_to_mp4",
+    ("wmv", "gif"): "video_to_gif",
+    ("wmv", "webm"): "video_to_webm",
+    ("flv", "mp4"): "video_to_mp4",
+    ("flv", "gif"): "video_to_gif",
+    ("flv", "webm"): "video_to_webm",
+    # 音频转换
+    ("mp3", "wav"): "audio_convert",
+    ("mp3", "ogg"): "audio_convert",
+    ("mp3", "aac"): "audio_convert",
+    ("mp3", "flac"): "audio_convert",
+    ("wav", "mp3"): "audio_convert",
+    ("wav", "ogg"): "audio_convert",
+    ("wav", "aac"): "audio_convert",
+    ("wav", "flac"): "audio_convert",
+    ("ogg", "mp3"): "audio_convert",
+    ("ogg", "wav"): "audio_convert",
+    ("ogg", "aac"): "audio_convert",
+    ("ogg", "flac"): "audio_convert",
+    ("aac", "mp3"): "audio_convert",
+    ("aac", "wav"): "audio_convert",
+    ("aac", "ogg"): "audio_convert",
+    ("aac", "flac"): "audio_convert",
+    ("flac", "mp3"): "audio_convert",
+    ("flac", "wav"): "audio_convert",
+    ("flac", "ogg"): "audio_convert",
+    ("flac", "aac"): "audio_convert",
 }
 
 
