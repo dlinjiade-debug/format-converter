@@ -1097,23 +1097,14 @@ void main(){
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.5/dist/ffmpeg.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>
-// ====== 留言板 (Firebase) ======
+// ====== Guestbook ======
 (function(){
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDummyKey_ReplaceWithYours",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:xxxxx"
-};
+const REPO='dlinjiade-debug/format-converter';
+const TOKEN='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'; // GitHub Token
 
-const el={list:$('gbList'),form:$('gbForm'),name:$('gbName'),text:$('gbText'),btn:$('gbSubmit'),info:$('gbInfo')};
-let db=null,ready=false;
+const el={list:$('gbList'),name:$('gbName'),text:$('gbText'),btn:$('gbSubmit'),info:$('gbInfo')};
+let messages=[];
 
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function timeAgo(ts){
@@ -1124,58 +1115,59 @@ function timeAgo(ts){
   return Math.floor(s/86400)+' 天前';
 }
 
-async function init(){
-  try{
-    firebase.initializeApp(FIREBASE_CONFIG);
-    await firebase.auth().signInAnonymously();
-    db=firebase.firestore();
-    ready=true;
-    loadMessages();
-  }catch(e){
-    console.warn('Firebase init failed:',e);
-    el.list.innerHTML='<div class="gb-empty">留言板未配置 Firebase，请参考页面说明进行设置</div>';
-    el.btn.disabled=true;
-  }
+function render(){
+  if(!TOKEN){el.list.innerHTML='<div class="gb-empty">留言板需配置 GitHub Token 才能使用。<br><span style="font-size:12px">参考 README 设置说明</span></div>';el.btn.disabled=true;return}
+  if(!messages.length){el.list.innerHTML='<div class="gb-empty">还没有留言，来做第一个留言的人 ✨</div>';return}
+  el.list.innerHTML=messages.map(m=>`<div class="gb-msg"><div class="gb-msg-top"><span class="gb-msg-name">${esc(m.name||'匿名')}</span><span class="gb-msg-time">${timeAgo(m.timestamp)}</span></div><div class="gb-msg-text">${esc(m.text)}</div></div>`).join('');
 }
 
-async function loadMessages(){
-  if(!db)return;
+async function load(){
+  if(!TOKEN){render();return}
   try{
-    const snap=await db.collection('messages').orderBy('timestamp','desc').limit(50).get();
-    if(snap.empty){el.list.innerHTML='<div class="gb-empty">还没有留言，来做第一个留言的人吧 ✨</div>';return}
-    el.list.innerHTML='';
-    snap.forEach(doc=>{
-      const d=doc.data();
-      const div=document.createElement('div');div.className='gb-msg';
-      div.innerHTML=`<div class="gb-msg-top"><span class="gb-msg-name">${esc(d.name||'匿名')}</span><span class="gb-msg-time">${timeAgo(d.timestamp)}</span></div><div class="gb-msg-text">${esc(d.text)}</div>`;
-      el.list.appendChild(div);
-    });
+    const r=await fetch('comments.json?t='+Date.now());
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const raw=await r.json();
+    messages=Array.isArray(raw)?raw.sort((a,b)=>b.timestamp-a.timestamp):[];
+    render();
   }catch(e){
     el.list.innerHTML='<div class="gb-empty">留言加载失败，请刷新重试</div>';
   }
 }
 
 el.btn.onclick=async()=>{
-  if(!ready||!db)return;
+  if(!TOKEN){el.info.className='gb-info err';el.info.textContent='请先配置 GitHub Token';return}
   const text=el.text.value.trim();
   if(!text){el.info.className='gb-info err';el.info.textContent='请输入留言内容';return}
   if(text.length>500){el.info.className='gb-info err';el.info.textContent='留言不能超过500字';return}
   el.btn.disabled=true;el.info.className='gb-info';el.info.textContent='发布中...';
+
   try{
-    await db.collection('messages').add({
-      name:(el.name.value.trim()||'匿名').slice(0,30),
-      text:text,
-      timestamp:Date.now()
+    messages.push({name:(el.name.value.trim()||'匿名').slice(0,30),text:text,timestamp:Date.now()});
+    messages=messages.slice(-50);
+    messages.sort((a,b)=>b.timestamp-a.timestamp);
+
+    const apiUrl=`https://api.github.com/repos/${REPO}/contents/comments.json`;
+    const getR=await fetch(apiUrl,{headers:{Authorization:'token '+TOKEN}});
+    const fileData=await getR.json();
+    const sha=fileData.sha;
+
+    const content=btoa(unescape(encodeURIComponent(JSON.stringify(messages))));
+    await fetch(apiUrl,{
+      method:'PUT',
+      headers:{Authorization:'token '+TOKEN,'Content-Type':'application/json'},
+      body:JSON.stringify({message:'guestbook update',content:content,sha:sha})
     });
+
     el.text.value='';el.name.value='';
     el.info.className='gb-info ok';el.info.textContent='留言成功 ✨';
-    loadMessages();
+    render();
   }catch(e){
-    el.info.className='gb-info err';el.info.textContent='发布失败，请重试';
+    el.info.className='gb-info err';el.info.textContent='发布失败: '+e.message;
   }
-  setTimeout(()=>{el.btn.disabled=false},1500);
+  setTimeout(()=>{el.btn.disabled=false},2000);
 };
-init();
+
+load();
 })();
 </script>
 </body>
