@@ -176,6 +176,13 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
   font-size:11px;color:var(--text2);font-weight:500;letter-spacing:.02em;transition:all .3s;cursor:default}
 .tag:hover{border-color:rgba(139,92,246,.3);background:var(--violet-bg);color:var(--violet2)}
 
+/* Comments */
+.comments{margin-top:36px}
+.comments-header{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.comments-header span{font:700 15px/1 var(--sans);color:var(--text);letter-spacing:.02em}
+#comments-container{border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+#comments-container .utterances{max-width:100%}
+
 /* Footer */
 .foot{text-align:center;margin-top:48px;padding-top:28px;border-top:1px solid var(--border)}
 .foot p{font-size:12px;color:var(--text3);line-height:1.8}
@@ -290,7 +297,22 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
     <span class="tag">MP4 → WebM</span><span class="tag">MKV → MP4</span><span class="tag">MP3 → WAV</span>
     <span class="tag">WAV → MP3</span><span class="tag">FLAC → WAV</span><span class="tag">视频转 GIF</span>
   </div>
-  <div class="foot anim" style="animation-delay:.3s">
+  <div class="comments anim" style="animation-delay:.35s">
+    <div class="comments-header">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--violet2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span>留言板</span>
+    </div>
+    <div id="comments-container">
+      <script src="https://utteranc.es/client.js"
+        repo="dlinjiade-debug/format-converter"
+        issue-term="留言板"
+        theme="github-dark"
+        crossorigin="anonymous"
+        async>
+      </script>
+    </div>
+  </div>
+  <div class="foot anim" style="animation-delay:.4s">
     <p>All conversions happen locally in your browser.<br>Files never leave your machine.</p>
     <p style="margin-top:8px">Built by <a href="#">linjiade</a></p>
   </div>
