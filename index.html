@@ -198,19 +198,14 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
 #bg-layer{
   position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;
   background:#06060b;
+  background-image:
+    radial-gradient(circle at 25% 20%,rgba(139,92,246,.35),transparent 50%),
+    radial-gradient(circle at 75% 80%,rgba(244,63,94,.25),transparent 50%),
+    radial-gradient(circle at 55% 45%,rgba(14,165,233,.2),transparent 45%);
 }
 #us-bg{
   position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;
   pointer-events:none;overflow:hidden;
-}
-@media(max-width:767px){
-  #bg-layer{
-    background:#06060b;
-    background-image:
-      radial-gradient(circle at 25% 20%,rgba(139,92,246,.3),transparent 50%),
-      radial-gradient(circle at 75% 80%,rgba(244,63,94,.2),transparent 50%),
-      radial-gradient(circle at 55% 45%,rgba(14,165,233,.15),transparent 45%);
-  }
 }
 </style>
 
