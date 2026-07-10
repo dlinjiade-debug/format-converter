@@ -180,8 +180,25 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
 .comments{margin-top:36px}
 .comments-header{display:flex;align-items:center;gap:10px;margin-bottom:16px}
 .comments-header span{font:700 15px/1 var(--sans);color:var(--text);letter-spacing:.02em}
-#comments-container{border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
-#comments-container .utterances{max-width:100%}
+.gb-form{display:flex;flex-direction:column;gap:10px}
+.gb-form input,.gb-form textarea{width:100%;padding:12px 16px;background:rgba(255,255,255,.035);border:1px solid var(--border);border-radius:12px;color:var(--text);font:400 14px/1.5 var(--sans);resize:vertical;outline:none;transition:border-color .3s}
+.gb-form input:focus,.gb-form textarea:focus{border-color:var(--violet)}
+.gb-form textarea{min-height:70px}
+#gbSubmit{padding:10px 24px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border:none;border-radius:10px;font:600 13px var(--sans);cursor:pointer;transition:all .3s;align-self:flex-end}
+#gbSubmit:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(139,92,246,.3)}
+#gbSubmit:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.gb-info{font-size:12px;color:var(--text3);min-height:18px}
+.gb-info.err{color:var(--rose)}
+.gb-info.ok{color:var(--emerald)}
+.gb-list{margin-top:20px;display:flex;flex-direction:column;gap:12px}
+.gb-loading{text-align:center;color:var(--text3);font-size:13px;padding:20px}
+.gb-empty{text-align:center;color:var(--text3);font-size:13px;padding:20px}
+.gb-msg{background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:12px;padding:14px 18px;transition:border-color .2s}
+.gb-msg:hover{border-color:var(--border2)}
+.gb-msg-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.gb-msg-name{font:600 13px/1 var(--sans);color:var(--violet2)}
+.gb-msg-time{font-size:11px;color:var(--text3);font-family:var(--mono)}
+.gb-msg-text{font-size:14px;color:var(--text);line-height:1.6;white-space:pre-wrap;word-break:break-word}
 
 /* Footer */
 .foot{text-align:center;margin-top:48px;padding-top:28px;border-top:1px solid var(--border)}
@@ -302,14 +319,14 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--violet2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       <span>留言板</span>
     </div>
-    <div id="comments-container">
-      <script src="https://utteranc.es/client.js"
-        repo="dlinjiade-debug/format-converter"
-        issue-term="留言板"
-        theme="github-dark"
-        crossorigin="anonymous"
-        async>
-      </script>
+    <div class="gb-form" id="gbForm">
+      <input type="text" id="gbName" placeholder="你的昵称（选填）" maxlength="30" autocomplete="off">
+      <textarea id="gbText" placeholder="说点什么..." maxlength="500" rows="3"></textarea>
+      <button id="gbSubmit">发布留言</button>
+      <div class="gb-info" id="gbInfo"></div>
+    </div>
+    <div class="gb-list" id="gbList">
+      <div class="gb-loading">加载留言中...</div>
     </div>
   </div>
   <div class="foot anim" style="animation-delay:.4s">
@@ -1080,5 +1097,86 @@ void main(){
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.5/dist/ffmpeg.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+// ====== 留言板 (Firebase) ======
+(function(){
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDummyKey_ReplaceWithYours",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "000000000000",
+  appId: "1:000000000000:web:xxxxx"
+};
+
+const el={list:$('gbList'),form:$('gbForm'),name:$('gbName'),text:$('gbText'),btn:$('gbSubmit'),info:$('gbInfo')};
+let db=null,ready=false;
+
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function timeAgo(ts){
+  const s=(Date.now()-ts)/1e3;
+  if(s<60)return '刚刚';
+  if(s<3600)return Math.floor(s/60)+' 分钟前';
+  if(s<86400)return Math.floor(s/3600)+' 小时前';
+  return Math.floor(s/86400)+' 天前';
+}
+
+async function init(){
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    await firebase.auth().signInAnonymously();
+    db=firebase.firestore();
+    ready=true;
+    loadMessages();
+  }catch(e){
+    console.warn('Firebase init failed:',e);
+    el.list.innerHTML='<div class="gb-empty">留言板未配置 Firebase，请参考页面说明进行设置</div>';
+    el.btn.disabled=true;
+  }
+}
+
+async function loadMessages(){
+  if(!db)return;
+  try{
+    const snap=await db.collection('messages').orderBy('timestamp','desc').limit(50).get();
+    if(snap.empty){el.list.innerHTML='<div class="gb-empty">还没有留言，来做第一个留言的人吧 ✨</div>';return}
+    el.list.innerHTML='';
+    snap.forEach(doc=>{
+      const d=doc.data();
+      const div=document.createElement('div');div.className='gb-msg';
+      div.innerHTML=`<div class="gb-msg-top"><span class="gb-msg-name">${esc(d.name||'匿名')}</span><span class="gb-msg-time">${timeAgo(d.timestamp)}</span></div><div class="gb-msg-text">${esc(d.text)}</div>`;
+      el.list.appendChild(div);
+    });
+  }catch(e){
+    el.list.innerHTML='<div class="gb-empty">留言加载失败，请刷新重试</div>';
+  }
+}
+
+el.btn.onclick=async()=>{
+  if(!ready||!db)return;
+  const text=el.text.value.trim();
+  if(!text){el.info.className='gb-info err';el.info.textContent='请输入留言内容';return}
+  if(text.length>500){el.info.className='gb-info err';el.info.textContent='留言不能超过500字';return}
+  el.btn.disabled=true;el.info.className='gb-info';el.info.textContent='发布中...';
+  try{
+    await db.collection('messages').add({
+      name:(el.name.value.trim()||'匿名').slice(0,30),
+      text:text,
+      timestamp:Date.now()
+    });
+    el.text.value='';el.name.value='';
+    el.info.className='gb-info ok';el.info.textContent='留言成功 ✨';
+    loadMessages();
+  }catch(e){
+    el.info.className='gb-info err';el.info.textContent='发布失败，请重试';
+  }
+  setTimeout(()=>{el.btn.disabled=false},1500);
+};
+init();
+})();
+</script>
 </body>
 </html>
