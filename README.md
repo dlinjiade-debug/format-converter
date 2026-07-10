@@ -59,3 +59,26 @@ format-converter/
 - 视频/音频转换首次需要加载 FFmpeg.wasm 核心文件（约 25MB），请耐心等待
 - 建议使用 Chrome/Edge/Firefox 最新版本
 - 处理大文件时请确保有足够内存
+
+## 留言板配置
+
+留言板使用 Firebase 匿名认证，无需注册即可留言。配置步骤：
+
+1. 打开 [Firebase Console](https://console.firebase.google.com/) 并创建项目
+2. **Authentication** → Sign-in method → **Anonymous** → Enable
+3. **Firestore Database** → Create database → 选择 `nam5` → **Start in test mode**
+4. Project Settings → Your apps → Web app → 注册 → 复制 `firebaseConfig`
+5. 在 `index.html` 中搜索 `FIREBASE_CONFIG`，替换为你的配置
+
+```javascript
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSy...",
+  authDomain: "xxx.firebaseapp.com",
+  projectId: "xxx",
+  storageBucket: "xxx.appspot.com",
+  messagingSenderId: "xxx",
+  appId: "xxx"
+};
+```
+
+> Firestore 测试模式 30 天后过期，届时需更新安全规则或将数据迁移。
