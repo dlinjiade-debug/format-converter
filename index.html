@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>linjiade 的转换器</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔄</text></svg>">
 <style>
@@ -712,16 +713,28 @@ async function csv2html(f){const t=await rd(f);const wb=XLSX.read(t,{type:'strin
 let ffmpegInstance=null;
 async function getFFmpeg(){
   if(ffmpegInstance&&ffmpegInstance.isLoaded())return ffmpegInstance;
-  $('progD').textContent='正在加载 FFmpeg 引擎 (首次约 15 秒)...';
+  $('progD').textContent='正在下载视频引擎 (约 25MB)...';
+  $('bar').style.width='3%';
+  const startTime=Date.now();
+  const timer=setInterval(()=>{
+    const elapsed=(Date.now()-startTime)/1e3;
+    const fake=Math.min(3+elapsed/90*92,95);
+    $('bar').style.width=fake+'%';
+    $('progD').textContent=`正在下载视频引擎... ${Math.round(fake)}%${elapsed>30?' (首次较慢,请耐心等待)':''}`;
+  },600);
   const{createFFmpeg,fetchFile}=FFmpeg;
   const ff=createFFmpeg({
     log:true,
     corePath:'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
     progress:({ratio})=>{
       $('progD').textContent=`正在转码... ${Math.min(Math.round(ratio*100),99)}%`;
+      $('bar').style.width=Math.min(Math.round(ratio*100),99)+'%';
     }
   });
-  await ff.load();
+  try{await ff.load()}catch(e){clearInterval(timer);throw new Error('视频引擎下载失败,请检查网络后刷新页面重试')}
+  clearInterval(timer);
+  $('bar').style.width='100%';
+  $('progD').textContent='引擎就绪,开始转码...';
   ffmpegInstance=ff;
   window._fetchFile=fetchFile;
   return ff;
@@ -758,7 +771,12 @@ async function vid2mp4(f){
 
   $('progD').textContent='正在转码为 MP4(H.264)...';
   const outName='output.mp4';
-  await ff.run('-i',inName,'-c:v','libx264','-preset','ultrafast','-crf','23','-c:a','aac','-b:a','128k','-movflags','+faststart',outName);
+  const isMobile=window.innerWidth<768;
+  const args=['-i',inName,'-c:v','libx264','-preset','ultrafast'];
+  if(isMobile)args.push('-vf','scale=640:-2','-crf','26');
+  else args.push('-crf','23');
+  args.push('-c:a','aac','-b:a','96k','-movflags','+faststart',outName);
+  await ff.run(...args);
 
   $('progD').textContent='正在读取文件...';
   const data=ff.FS('readFile',outName);
