@@ -991,6 +991,7 @@ void main(){
 
   gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
   gl.enable(gl.BLEND);
+  gl.clearColor(0,0,0,0);
 
   function resize(){
     const w=ctn.offsetWidth,h=ctn.offsetHeight;
@@ -1019,6 +1020,7 @@ void main(){
 
   function render(t){
     requestAnimationFrame(render);
+    gl.clear(gl.COLOR_BUFFER_BIT);
     gl.uniform1f(loc.uTime,t*.001);
     gl.drawArrays(gl.TRIANGLES,0,3);
   }
