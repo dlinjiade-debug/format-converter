@@ -753,45 +753,61 @@ async function csv2html(f){const t=await rd(f);const wb=XLSX.read(t,{type:'strin
 let ffmpegInstance=null;
 async function getFFmpeg(){
   if(ffmpegInstance&&ffmpegInstance.isLoaded())return ffmpegInstance;
-  if(typeof FFmpeg==='undefined')throw new Error('视频引擎脚本未加载,请刷新页面重试');
-  $('progD').textContent='正在下载视频引擎 (约 25MB)...';
-  $('bar').style.width='3%';
-  const startTime=Date.now();
-  const timer=setInterval(()=>{
-    const elapsed=(Date.now()-startTime)/1e3;
-    const fake=Math.min(3+elapsed/90*92,95);
-    $('bar').style.width=fake+'%';
-    $('progD').textContent=`正在下载视频引擎... ${Math.round(fake)}%${elapsed>30?' (首次较慢,请耐心等待)':''}`;
-  },600);
+  if(typeof FFmpeg==='undefined')throw new Error('视频引擎脚本未加载,请刷新重试');
 
-  const{createFFmpeg,fetchFile}=FFmpeg;
-  const coreUrls=[
-    'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
-    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
-  ];
+  const CORE_BASE='https://unpkg.com/@ffmpeg/core@0.11.0/dist';
+  const CORE_JS=`${CORE_BASE}/ffmpeg-core.js`;
+  const CORE_WASM=`${CORE_BASE}/ffmpeg-core.wasm`;
 
-  let ff=null,lastErr=null;
-  for(const coreUrl of coreUrls){
+  $('bar').style.width='0%';$('progD').textContent='正在下载视频引擎核心文件...';
+
+  // Step 1: Download WASM with real progress
+  let wasmBlob=null;
+  for(let retry=0;retry<2&&!wasmBlob;retry++){
     try{
-      ff=createFFmpeg({
-        log:true,
-        corePath:coreUrl,
-        progress:({ratio})=>{
-          const pct=Math.min(Math.round(ratio*100),99);
-          $('progD').textContent=`正在转码... ${pct}%`;
-          $('bar').style.width=pct+'%';
+      const r=await fetch(CORE_WASM);
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const total=parseInt(r.headers.get('content-length')||'0',10);
+      if(!r.body||!total){
+        wasmBlob=await r.blob();
+      }else{
+        const reader=r.body.getReader();
+        const chunks=[];let received=0;
+        while(true){
+          const{done,value}=await reader.read();
+          if(done)break;
+          chunks.push(value);received+=value.length;
+          $('bar').style.width=Math.round(received/total*90)+'%';
+          $('progD').textContent=`正在下载引擎... ${Math.round(received/total*100)}%`;
         }
-      });
-      await ff.load();
-      break;
-    }catch(e){lastErr=e;ff=null;continue}
+        wasmBlob=new Blob(chunks);
+      }
+    }catch(e){if(retry===0)await new Promise(r=>setTimeout(r,1000))}
   }
+  if(!wasmBlob)throw new Error('视频引擎下载失败,请检查网络后刷新重试');
+  const wasmUrl=URL.createObjectURL(wasmBlob);
 
-  clearInterval(timer);
-  if(!ff){
-    const msg=lastErr?lastErr.message:'CDN 不可用';
-    throw new Error(`视频引擎加载失败: ${msg}. 请检查网络连接后重试`);
-  }
+  // Step 2: Download core JS and patch WASM path
+  const jsR=await fetch(CORE_JS);
+  let jsSrc=await jsR.text();
+  jsSrc=jsSrc.replace(/["']ffmpeg-core\.wasm["']/g,JSON.stringify(wasmUrl));
+  jsSrc=jsSrc.replace(/["']ffmpeg-core\.worker\.js["']/g,JSON.stringify(jsUrl));
+  const jsBlob=new Blob([jsSrc],{type:'application/javascript'});
+  const jsUrl=URL.createObjectURL(jsBlob);
+
+  // Step 3: Load FFmpeg with local core
+  $('bar').style.width='92%';$('progD').textContent='正在初始化引擎...';
+  const{createFFmpeg,fetchFile}=FFmpeg;
+  const ff=createFFmpeg({
+    log:true,
+    corePath:jsUrl,
+    progress:({ratio})=>{
+      const pct=Math.min(Math.round(ratio*100),99);
+      $('bar').style.width=92+Math.round(ratio*7)+'%';
+      $('progD').textContent=`正在转码... ${pct}%`;
+    }
+  });
+  await ff.load();
 
   $('bar').style.width='100%';
   $('progD').textContent='引擎就绪,开始转码...';
