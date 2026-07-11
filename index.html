@@ -953,7 +953,9 @@ hook($('goI'),'click',async()=>{if(!imf.length)return;$('progI').classList.add('
 
 // Strands WebGL 动态背景 (纯 WebGL2, 无外部依赖)
 (function(){
-  const ctn=document.getElementById('us-bg');
+let ctn;
+try{
+  ctn=document.getElementById('us-bg');
   if(!ctn)return;
 
   const canvas=document.createElement('canvas');
@@ -1100,6 +1102,7 @@ void main(){
     gl.drawArrays(gl.TRIANGLES,0,3);
   }
   requestAnimationFrame(render);
+}catch(e){console.warn('WebGL:',e);if(ctn)ctn.style.display='none'}
 })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
