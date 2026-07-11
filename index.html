@@ -755,7 +755,14 @@ async function csv2html(f){const t=await rd(f);const wb=XLSX.read(t,{type:'strin
 let ffmpegInstance=null;
 async function getFFmpeg(){
   if(ffmpegInstance&&ffmpegInstance.isLoaded())return ffmpegInstance;
-  if(typeof FFmpeg==='undefined')throw new Error('视频引擎脚本未加载,请刷新重试');
+  if(typeof FFmpeg==='undefined'){
+    await new Promise((ok,no)=>{
+      const s=document.createElement('script');
+      s.src='https://unpkg.com/@ffmpeg/ffmpeg@0.11.5/dist/ffmpeg.min.js';
+      s.onload=ok;s.onerror=()=>no(new Error('FFmpeg 脚本加载失败'));
+      document.body.appendChild(s);
+    });
+  }
 
   const CORE_BASE='https://unpkg.com/@ffmpeg/core@0.11.0/dist';
   const CORE_JS=`${CORE_BASE}/ffmpeg-core.js`;
@@ -1107,16 +1114,13 @@ void main(){
 }catch(e){console.warn('WebGL:',e);if(ctn)ctn.style.display='none'}
 })();
 </script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script defer src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.5/dist/ffmpeg.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
 // ====== Guestbook ======
 (function(){
