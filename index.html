@@ -1120,7 +1120,6 @@ void main(){
 (function(){
 const REPO='dlinjiade-debug/format-converter';
 const TOKEN='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';
-const RAW_URL='https://raw.githubusercontent.com/dlinjiade-debug/format-converter/master/comments.json';
 
 const el={list:$('gbList'),name:$('gbName'),text:$('gbText'),btn:$('gbSubmit'),info:$('gbInfo')};
 let messages=[];
@@ -1135,7 +1134,7 @@ function render(){
 
 async function load(){
   try{
-    const r=await fetch(RAW_URL+'?t='+Date.now());
+    const r=await fetch('/format-converter/comments.json?t='+Date.now());
     if(!r.ok)throw new Error('HTTP '+r.status);
     const raw=await r.json();
     messages=Array.isArray(raw)?raw.sort((a,b)=>b.timestamp-a.timestamp):[];
