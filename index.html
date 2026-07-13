@@ -496,6 +496,19 @@ async function renderPage(doc,pageNum,scale){
   return c;
 }
 
+function normFont(fn){
+  const n=(fn||'').replace(/[+,-]/g,'').toLowerCase();
+  if(/times/i.test(n))return 'Times New Roman';
+  if(/helv|arial/i.test(n))return 'Arial';
+  if(/cour|mono|consolas/i.test(n))return 'Courier New';
+  if(/song|simsun|nsim|fangsong/i.test(n))return 'SimSun';
+  if(/hei|simhei|yahei|microsoftyahei|msyahei|pingfang/i.test(n))return 'Microsoft YaHei';
+  if(/kai/i.test(n))return 'KaiTi';
+  if(/ming/i.test(n))return 'PMingLiU';
+  if(/noto/i.test(n))return 'Noto Sans SC';
+  return 'Microsoft YaHei';
+}
+
 async function pdfPages(f){
   $('progD').textContent='正在打开 PDF...';
   const doc=await openPdf(f);
@@ -507,29 +520,46 @@ async function pdfPages(f){
     try{
       const pg=await doc.getPage(i);
       const tc=await pg.getTextContent();
-      const items=tc.items||[];
+      const items=(tc.items||[]).filter(it=>it.str&&it.str.trim());
       if(!items.length){pages.push({text:'',hasText:false});continue}
-      // 按 Y 坐标分组行
-      const lines=[];let cur=[];let lastY=null;
-      items.forEach(item=>{
-        if(!item.str)return;
-        const y=Math.round(item.transform[5]);
-        if(lastY!==null&&Math.abs(y-lastY)>5){
-          lines.push(cur.sort((a,b)=>a.x-b.x).map(j=>j.str).join(''));
-          cur=[];
-        }
-        cur.push({str:item.str,x:item.transform[4],y});
-        lastY=y;
+
+      // 动态行距阈值：基于平均字号
+      const avgFont=items.reduce((s,it)=>s+Math.abs(it.transform[3]||10),0)/items.length;
+      const threshold=Math.max(avgFont*0.45,3);
+
+      // 按 Y(从上到下) + X(每行从左到右) 排序
+      items.sort((a,b)=>{
+        const ay=Math.round(a.transform[5]),by=Math.round(b.transform[5]);
+        if(Math.abs(ay-by)<=threshold)return a.transform[4]-b.transform[4];
+        return by-ay;
       });
-      if(cur.length)lines.push(cur.sort((a,b)=>a.x-b.x).map(j=>j.str).join(''));
-      const text=lines.join('\n').trim();
-      pages.push({text,hasText:!!text});
+
+      const fmtLines=[];let curLine=[],lastY=null,lastX=null;
+      items.forEach(it=>{
+        const y=Math.round(it.transform[5]),x=it.transform[4];
+        const fontSize=Math.round(Math.abs(it.transform[3]||12));
+        const fn=it.fontName||'';
+        const isBold=/bold|heavy|black/i.test(fn);
+        const isItalic=/italic|oblique/i.test(fn);
+
+        if(lastY!==null&&Math.abs(y-lastY)>threshold){
+          if(curLine.length)fmtLines.push({y:lastY,items:curLine,gap:Math.abs(y-lastY)});
+          curLine=[];
+        }
+        curLine.push({str:it.str,x,fontSize:Math.max(fontSize,6),fontName:normFont(fn),isBold,isItalic});
+        lastY=y;lastX=x;
+      });
+      if(curLine.length)fmtLines.push({y:lastY,items:curLine,gap:0});
+
+      const text=fmtLines.map(l=>l.items.map(j=>j.str).join('')).join('\n').trim();
+      // 图文混合检测: 文字少于3行的页面整体渲染为图片，保留视觉效果
+      const richLines=fmtLines.filter(l=>l.items.reduce((s,it)=>s+it.str.replace(/\s/g,'').length,0)>2).length;
+      pages.push({text,hasText:richLines>=3&&!!text,fmtLines});
     }catch(e){
       console.warn(`Page ${i}:`,e);
       pages.push({text:'',hasText:false});
     }
   }
-  // 不 destroy doc, 后面可能还要渲染图片
   pages._doc=doc;
   return pages;
 }
@@ -546,14 +576,12 @@ async function pdf2docx(f){
   $('progD').textContent='正在解析 PDF...';
   const pages=await pdfPages(f);
   $('progD').textContent='正在生成 Word 文档...';
-  const{Document,Packer,Paragraph,TextRun,HeadingLevel,AlignmentType,ImageRun}=docx;
+  const{Document,Packer,Paragraph,TextRun,HeadingLevel,AlignmentType,ImageRun,Table,TableRow,TableCell,WidthType}=docx;
   const children=[];
   let hasAnyContent=false;
 
   for(let pi=0;pi<pages.length;pi++){
     const pg=pages[pi];
-
-    // 页码标题
     if(pages.length>1){
       children.push(new Paragraph({
         text:`— 第 ${pi+1} 页 —`,
@@ -563,23 +591,75 @@ async function pdf2docx(f){
       }));
     }
 
-    if(pg.hasText){
-      // 有文字：提取文字
+    if(pg.hasText&&pg.fmtLines){
       hasAnyContent=true;
-      const lines=pg.text.split('\n');
-      lines.forEach(line=>{
-        const t=line.trim();
-        if(!t)return;
-        const isHeading=t.length<50&&(t===t.toUpperCase()||/^\d+[\.\、]/.test(t)||/^第[一二三四五六七八九十\d]+[章节课]/.test(t));
-        if(isHeading){
-          children.push(new Paragraph({text:t,heading:HeadingLevel.HEADING_3,spacing:{before:160,after:80}}));
-        }else{
-          children.push(new Paragraph({
-            children:[new TextRun({text:t,size:24,font:'Microsoft YaHei'})],
-            spacing:{after:80,line:360}
-          }));
+      const lines=pg.fmtLines;
+      let i=0;
+      while(i<lines.length){
+        const line=lines[i];
+        if(!line.items||!line.items.length){i++;continue}
+        // 段落检测: 上一行与当前行的间距 > 平均字号 2 倍视为新段落
+        const prev=i>0?lines[i-1]:null;
+        const avgFontSize=lines.reduce((s,l)=>s+(l.items[0]?.fontSize||12),0)/lines.length;
+        const isParaBreak=prev&&prev.gap>avgFontSize*2;
+
+        // 表格检测: 连续 2+ 行的 items 在 X 轴上对齐
+        let tblRows=[];
+        if(i+1<lines.length){
+          const curXs=line.items.map(it=>Math.round(it.x/10)*10).join(',');
+          let j=i+1;
+          const maybeTbl=[line];
+          while(j<lines.length&&lines[j].items&&lines[j].items.length>=2){
+            const nxtXs=lines[j].items.map(it=>Math.round(it.x/10)*10).join(',');
+            if(nxtXs===curXs){maybeTbl.push(lines[j]);j++}
+            else break;
+          }
+          if(maybeTbl.length>=3){
+            const colCount=line.items.length;
+            const cols=line.items.map(it=>Math.round(it.x));
+            // 生成 docx Table
+            const rows=maybeTbl.map(tl=>new TableRow({children:tl.items.map(ti=>new TableCell({children:[new Paragraph({children:[new TextRun({text:ti.str,size:ti.fontSize*2,bold:ti.isBold,font:ti.fontName})]})],width:{size:Math.floor(9000/colCount),type:WidthType.PERCENTAGE}}))}));
+            children.push(new Table({rows,width:{size:100,type:WidthType.PERCENTAGE}}));
+            i=j;continue;
+          }
         }
-      });
+
+        // 普通段落
+        const merged=[];
+        line.items.forEach(it=>{
+          const last=merged[merged.length-1];
+          if(last&&last.isBold===it.isBold&&last.isItalic===it.isItalic&&last.fontSize===it.fontSize&&last.fontName===it.fontName){
+            last.str+=it.str;
+          }else{merged.push({...it})}
+        });
+        if(!merged.length){i++;continue}
+        const allText=merged.map(m=>m.str).join('').trim();
+        if(!allText){i++;continue}
+
+        // 标题检测
+        const isHeading=merged.length<=2&&allText.length<50&&(
+          /^第[一二三四五六七八九十\d]+[章节课条篇部分]/.test(allText)||
+          /^\d+[\.\、]\s/.test(allText)||
+          merged[0].isBold&&merged[0].fontSize>=16
+        );
+
+        const runs=merged.map(m=>new TextRun({
+          text:m.str,
+          size:m.fontSize*2, // docx 半磅单位
+          font:m.fontName,
+          bold:!!m.isBold,
+          italics:!!m.isItalic
+        }));
+
+        if(isHeading){
+          children.push(new Paragraph({children:runs,heading:HeadingLevel.HEADING_3,spacing:{before:160,after:80}}));
+        }else{
+          const spacing={after:60,line:360};
+          if(isParaBreak)spacing.before=160;
+          children.push(new Paragraph({children:runs,spacing}));
+        }
+        i++;
+      }
     }else{
       // 无文字（扫描件/图片型 PDF）：渲染为图片嵌入
       $('progD').textContent=`正在渲染第 ${pi+1} 页为图片...`;
@@ -625,7 +705,27 @@ async function pdf2html(f){
   const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const hasText=pages.some(p=>p.hasText);
   if(!hasText)throw new Error('PDF 中没有可提取的文字（可能是扫描件）');
-  const body=pages.map((pg,i)=>`<section style="margin:24px auto;max-width:800px;padding:36px 40px;background:#fff;border:1px solid #e5e5e5;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.04)"><pre style="white-space:pre-wrap;font-family:Georgia,'Noto Serif SC',serif;line-height:1.9;font-size:15px;color:#1a1a1a">${esc(pg.text)}</pre>${pages.length>1?`<div style="text-align:center;color:#bbb;font-size:12px;margin-top:20px;padding-top:16px;border-top:1px solid #f0f0f0">第 ${i+1} 页</div>`:''}</section>`).join('\n');
+  const body=pages.map((pg,i)=>{
+    let html='';
+    if(pg.fmtLines&&pg.fmtLines.length){
+      pg.fmtLines.forEach(line=>{
+        if(!line.items||!line.items.length)return;
+        const items=line.items.map(it=>{
+          let tag='span';const st=[];
+          if(it.isBold)st.push('font-weight:700');
+          if(it.isItalic)st.push('font-style:italic');
+          st.push(`font-size:${it.fontSize}px`);
+          st.push(`font-family:"${it.fontName}","Microsoft YaHei",sans-serif`);
+          return `<${tag} style="${st.join(';')}">${esc(it.str)}</${tag}>`;
+        }).join('');
+        html+=`<p style="margin:2px 0;line-height:1.8">${items||'&nbsp;'}</p>`;
+      });
+      html=`<section style="margin:24px auto;max-width:800px;padding:28px 36px;background:#fff;border:1px solid #e5e5e5;border-radius:10px;box-shadow:0 1px 8px rgba(0,0,0,.03)">${html}</section>`;
+    }else{
+      html=`<section style="margin:24px auto;max-width:800px;padding:36px 40px;background:#fff;border:1px solid #e5e5e5;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.04)"><pre style="white-space:pre-wrap;font-family:Georgia,'Noto Serif SC',serif;line-height:1.9;font-size:15px;color:#1a1a1a">${esc(pg.text)}</pre>${pages.length>1?`<div style="text-align:center;color:#bbb;font-size:12px;margin-top:20px;padding-top:16px;border-top:1px solid #f0f0f0">第 ${i+1} 页</div>`:''}</section>`;
+    }
+    return html;
+  }).join('\n');
   if(pages._doc)try{pages._doc.destroy()}catch(e){}
   return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${f.name}</title><style>*{margin:0;box-sizing:border-box}body{background:#f7f7f5;padding:24px 16px;font-family:system-ui,sans-serif}</style></head><body>${body}</body></html>`],{type:'text/html;charset=utf-8'});
 }
@@ -651,10 +751,11 @@ async function word2pdf(f){
   $('progD').textContent='正在渲染 PDF...';
   const div=document.createElement('div');
   div.innerHTML=r.value;
-  div.style.cssText='font-family:"Plus Jakarta Sans","Microsoft YaHei",system-ui,sans-serif;padding:28px;line-height:1.9;color:#1a1a1a;max-width:800px;font-size:15px';
+  div.style.cssText='font-family:"Plus Jakarta Sans","Microsoft YaHei","SimSun","Noto Serif SC",system-ui,sans-serif;padding:28px;line-height:1.9;color:#1a1a1a;max-width:800px;font-size:15px;word-wrap:break-word';
+  div.querySelectorAll('img').forEach(img=>{img.style.maxWidth='100%';img.style.height='auto'});
   document.body.appendChild(div);
   try{
-    return await html2pdf().set({margin:[14,14,14,14],filename:'output.pdf',html2canvas:{scale:2,useCORS:true,letterRendering:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}}).from(div).outputPdf('blob');
+    return await html2pdf().set({margin:[14,14,14,14],filename:'output.pdf',html2canvas:{scale:2,useCORS:true,letterRendering:true,logging:false},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}}).from(div).outputPdf('blob');
   }finally{document.body.removeChild(div)}
 }
 
