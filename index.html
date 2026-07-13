@@ -178,30 +178,6 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
   font-size:11px;color:var(--text2);font-weight:500;letter-spacing:.02em;transition:all .3s;cursor:default}
 .tag:hover{border-color:rgba(139,92,246,.3);background:var(--violet-bg);color:var(--violet2)}
 
-/* Comments */
-.comments{margin-top:36px}
-.comments-header{display:flex;align-items:center;gap:10px;margin-bottom:16px}
-.comments-header span{font:700 15px/1 var(--sans);color:var(--text);letter-spacing:.02em}
-.gb-form{display:flex;flex-direction:column;gap:10px}
-.gb-form input,.gb-form textarea{width:100%;padding:12px 16px;background:rgba(255,255,255,.035);border:1px solid var(--border);border-radius:12px;color:var(--text);font:400 14px/1.5 var(--sans);resize:vertical;outline:none;transition:border-color .3s}
-.gb-form input:focus,.gb-form textarea:focus{border-color:var(--violet)}
-.gb-form textarea{min-height:70px}
-#gbSubmit{padding:10px 24px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border:none;border-radius:10px;font:600 13px var(--sans);cursor:pointer;transition:all .3s;align-self:flex-end}
-#gbSubmit:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(139,92,246,.3)}
-#gbSubmit:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.gb-info{font-size:12px;color:var(--text3);min-height:18px}
-.gb-info.err{color:var(--rose)}
-.gb-info.ok{color:var(--emerald)}
-.gb-list{margin-top:20px;display:flex;flex-direction:column;gap:12px}
-.gb-loading{text-align:center;color:var(--text3);font-size:13px;padding:20px}
-.gb-empty{text-align:center;color:var(--text3);font-size:13px;padding:20px}
-.gb-msg{background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:12px;padding:14px 18px;transition:border-color .2s}
-.gb-msg:hover{border-color:var(--border2)}
-.gb-msg-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-.gb-msg-name{font:600 13px/1 var(--sans);color:var(--violet2)}
-.gb-msg-time{font-size:11px;color:var(--text3);font-family:var(--mono)}
-.gb-msg-text{font-size:14px;color:var(--text);line-height:1.6;white-space:pre-wrap;word-break:break-word}
-
 /* Footer */
 .foot{text-align:center;margin-top:48px;padding-top:28px;border-top:1px solid var(--border)}
 .foot p{font-size:12px;color:var(--text3);line-height:1.8}
@@ -315,21 +291,6 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
     <span class="tag">MP4 → GIF</span><span class="tag">MOV → MP4</span><span class="tag">AVI → MP4</span>
     <span class="tag">MP4 → WebM</span><span class="tag">MKV → MP4</span><span class="tag">MP3 → WAV</span>
     <span class="tag">WAV → MP3</span><span class="tag">FLAC → WAV</span><span class="tag">视频转 GIF</span>
-  </div>
-  <div class="comments anim" style="animation-delay:.35s">
-    <div class="comments-header">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--violet2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      <span>留言板</span>
-    </div>
-    <div class="gb-form" id="gbForm">
-      <input type="text" id="gbName" placeholder="你的昵称（选填）" maxlength="30" autocomplete="off">
-      <textarea id="gbText" placeholder="说点什么..." maxlength="500" rows="3"></textarea>
-      <button id="gbSubmit">发布留言</button>
-      <div class="gb-info" id="gbInfo"></div>
-    </div>
-    <div class="gb-list" id="gbList">
-      <div class="gb-loading">加载留言中...</div>
-    </div>
   </div>
   <div class="foot anim" style="animation-delay:.4s">
     <p>All conversions happen locally in your browser.<br>Files never leave your machine.</p>
@@ -508,18 +469,28 @@ async function openPdf(f){
   const lib=await loadPdfJs();
   const buf=await f.arrayBuffer();
   try{
-    return await lib.getDocument({data:buf,useWorkerFetch:false,isEvalSupported:false}).promise;
-  }catch(e){
-    // worker 失败重试
-    lib.GlobalWorkerOptions.workerSrc='';
     return await lib.getDocument({data:buf}).promise;
+  }catch(e1){
+    try{
+      lib.GlobalWorkerOptions.workerSrc='';
+      return await lib.getDocument({data:buf,disableAutoFetch:true,isEvalSupported:false}).promise;
+    }catch(e2){
+      throw new Error('PDF 解析失败，文件可能已损坏或加密');
+    }
   }
 }
 
 // 渲染某页为 canvas (用于图片回退)
 async function renderPage(doc,pageNum,scale){
   const pg=await doc.getPage(pageNum);
-  const vp=pg.getViewport({scale:scale||1.5});
+  let sc=scale||2;
+  let vp=pg.getViewport({scale:sc});
+  // 防 canvas 超限 (多数浏览器限制 8192px 宽高或约 32M 像素)
+  const maxDim=8192,maxPx=32e6;
+  if(vp.width>maxDim||vp.height>maxDim||vp.width*vp.height>maxPx){
+    const r=Math.min(maxDim/Math.max(vp.width,vp.height),Math.sqrt(maxPx/(vp.width*vp.height)));
+    sc*=r;vp=pg.getViewport({scale:sc});
+  }
   const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;
   await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
   return c;
@@ -528,8 +499,9 @@ async function renderPage(doc,pageNum,scale){
 async function pdfPages(f){
   $('progD').textContent='正在打开 PDF...';
   const doc=await openPdf(f);
-  const pages=[];
   const total=doc.numPages;
+  if(total>80)throw new Error(`PDF 页数过多（${total}页），最多支持 80 页，请拆分后重试`);
+  const pages=[];
   for(let i=1;i<=total;i++){
     $('progD').textContent=`正在解析第 ${i}/${total} 页...`;
     try{
@@ -609,26 +581,21 @@ async function pdf2docx(f){
         }
       });
     }else{
-      // 无文字（扫描件）：渲染为图片嵌入
+      // 无文字（扫描件/图片型 PDF）：渲染为图片嵌入
       $('progD').textContent=`正在渲染第 ${pi+1} 页为图片...`;
       try{
         const canvas=await renderPage(pages._doc,pi+1,2);
-        const dataUrl=canvas.toDataURL('image/jpeg',0.92);
-        const base64=dataUrl.split(',')[1];
-        const imgBytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
-        const imgW=Math.round(canvas.width/2); // 转换为 docx 的 EMU 单位 (1/914400 inch)
-        const imgH=Math.round(canvas.height/2);
-        // 适配 A4 宽度 (大约 6 英寸 = 5486400 EMU)
+        const imgBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.92));
+        const imgBuf=await imgBlob.arrayBuffer();
+        const imgBytes=new Uint8Array(imgBuf);
+        const imgW=Math.round(canvas.width/2),imgH=Math.round(canvas.height/2);
         const maxW=5486400;
-        const ratio=maxW/(imgW*914400/72);
-        const finalW=Math.round(imgW*914400/72);
-        const finalH=Math.round(imgH*914400/72);
-        const scale=finalW>maxW?maxW/finalW:1;
-
+        const fW=Math.round(imgW*914400/72),fH=Math.round(imgH*914400/72);
+        const s=fW>maxW?maxW/fW:1;
         children.push(new Paragraph({
           children:[new ImageRun({
             data:imgBytes,
-            transformation:{width:Math.round(finalW*scale/914400*72),height:Math.round(finalH*scale/914400*72)},
+            transformation:{width:Math.round(fW*s/914400*72),height:Math.round(fH*s/914400*72)},
             type:'jpg'
           })],
           alignment:AlignmentType.CENTER,
@@ -1121,72 +1088,5 @@ void main(){
 <script async src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script async src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script async src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script>
-// ====== Guestbook ======
-(function(){
-const REPO='dlinjiade-debug/format-converter';
-const TOKEN='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';
-
-const el={list:$('gbList'),name:$('gbName'),text:$('gbText'),btn:$('gbSubmit'),info:$('gbInfo')};
-let messages=[];
-
-function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
-function timeAgo(ts){const s=(Date.now()-ts)/1e3;if(s<60)return '刚刚';if(s<3600)return Math.floor(s/60)+' 分钟前';if(s<86400)return Math.floor(s/3600)+' 小时前';return Math.floor(s/86400)+' 天前'}
-
-function render(){
-  if(!messages.length){el.list.innerHTML='<div class="gb-empty">还没有留言，来做第一个留言的人 ✨</div>';return}
-  el.list.innerHTML=messages.map(m=>`<div class="gb-msg"><div class="gb-msg-top"><span class="gb-msg-name">${esc(m.name||'匿名')}</span><span class="gb-msg-time">${timeAgo(m.timestamp)}</span></div><div class="gb-msg-text">${esc(m.text)}</div></div>`).join('');
-}
-
-async function load(){
-  try{
-    const r=await fetch('/format-converter/comments.json?t='+Date.now());
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const raw=await r.json();
-    messages=Array.isArray(raw)?raw.sort((a,b)=>b.timestamp-a.timestamp):[];
-    render();
-  }catch(e){el.list.innerHTML='<div class="gb-empty">留言加载失败，请刷新重试</div>'}
-}
-
-el.btn.onclick=async()=>{
-  const text=el.text.value.trim();
-  if(!text){el.info.className='gb-info err';el.info.textContent='请输入留言内容';return}
-  if(text.length>500){el.info.className='gb-info err';el.info.textContent='留言不能超过500字';return}
-  el.btn.disabled=true;el.info.className='gb-info';el.info.textContent='发布中...';
-
-  const apiUrl=`https://api.github.com/repos/${REPO}/contents/comments.json`;
-  for(let retry=0;retry<3;retry++){
-    try{
-      const getR=await fetch(apiUrl,{headers:{Authorization:'token '+TOKEN}});
-      if(!getR.ok)throw new Error('HTTP '+getR.status);
-      const fd=await getR.json();
-      const sha=fd.sha;
-      const content=atob(fd.content);
-      let arr=JSON.parse(content);
-      if(!Array.isArray(arr))arr=[];
-      arr.push({name:(el.name.value.trim()||'匿名').slice(0,30),text:text,timestamp:Date.now()});
-      arr=arr.slice(-50).sort((a,b)=>b.timestamp-a.timestamp);
-
-      const putR=await fetch(apiUrl,{
-        method:'PUT',
-        headers:{Authorization:'token '+TOKEN,'Content-Type':'application/json'},
-        body:JSON.stringify({message:'guestbook',content:btoa(unescape(encodeURIComponent(JSON.stringify(arr)))),sha:sha})
-      });
-      if(putR.status===409){await new Promise(r=>setTimeout(r,500));continue} // SHA conflict, retry
-      if(!putR.ok)throw new Error('HTTP '+putR.status);
-
-      el.text.value='';el.name.value='';
-      el.info.className='gb-info ok';el.info.textContent='留言成功 ✨';
-      messages=arr;render();
-      break;
-    }catch(e){
-      if(retry===2){el.info.className='gb-info err';el.info.textContent='发布失败: '+e.message}
-    }
-  }
-  setTimeout(()=>{el.btn.disabled=false},2000);
-};
-load();
-})();
-</script>
 </body>
 </html>
