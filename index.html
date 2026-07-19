@@ -114,6 +114,18 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
 .fb .e{font-weight:700;font-size:14px;display:block}
 .fb .n{font-size:10px;opacity:.45;margin-top:3px}
 
+.mode{display:none;margin-top:18px;padding:14px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.02)}
+.mode.show{display:block}
+.mode-h{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.mode-h label{font:700 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
+.mode-note{font-size:11px;color:var(--text3);line-height:1.5}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{display:block;margin:0;padding:11px 10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.015);cursor:pointer;text-align:center;color:var(--text2);transition:all .2s}
+.seg label b{display:block;font-size:13px;color:var(--text);margin-bottom:3px}
+.seg label span{font-size:10px;color:var(--text3)}
+.seg input:checked+label{border-color:var(--violet);background:var(--violet-bg);box-shadow:0 0 22px rgba(139,92,246,.1)}
+
 /* Button */
 .go{width:100%;padding:16px;margin-top:24px;border:none;border-radius:14px;
   background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;font:600 15px/1 var(--sans);
@@ -247,6 +259,18 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
           <button class="fi-x" id="fiX"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="fs" id="fs"><label>转换为</label><div class="fg" id="fg"></div></div>
+        <div class="mode" id="pdfMode">
+          <div class="mode-h">
+            <label>PDF 输出模式</label>
+            <div class="mode-note" id="pdfModeHint">文本优先适合编辑，版式优先适合保真。</div>
+          </div>
+          <div class="seg">
+            <input type="radio" name="pdfMode" id="pdfModeText" value="text" checked>
+            <label for="pdfModeText"><b>文本优先</b><span>可编辑 / 段落更自然</span></label>
+            <input type="radio" name="pdfMode" id="pdfModeLayout" value="layout">
+            <label for="pdfModeLayout"><b>版式优先</b><span>更像原稿 / 页面图片</span></label>
+          </div>
+        </div>
         <button class="go" id="go">开始转换</button>
         <div class="prog" id="prog"><div class="bar-bg"><div class="bar ok" id="bar"></div></div><div class="prog-t" id="progT"></div><div class="prog-detail" id="progD"></div></div>
         <div class="res" id="res"></div>
@@ -421,13 +445,29 @@ document.querySelectorAll('.tab').forEach(t=>{
 
 // ====== Format Conversion ======
 let sf=null,st=null;
-function rst(){sf=null;st=null;$('fi2').classList.remove('show');$('fs').classList.remove('show');$('go').classList.remove('show');$('prog').classList.remove('show');$('res').classList.remove('show');$('res').innerHTML='';$('fg').innerHTML='';$('fi').value='';$('bar').className='bar ok';$('progD').textContent=''}
+function rst(){sf=null;st=null;$('fi2').classList.remove('show');$('fs').classList.remove('show');$('pdfMode').classList.remove('show');$('go').classList.remove('show');$('prog').classList.remove('show');$('res').classList.remove('show');$('res').innerHTML='';$('fg').innerHTML='';$('fi').value='';$('bar').className='bar ok';$('progD').textContent=''}
 function hook(el,ev,fn){el.addEventListener(ev,fn)}
 hook($('drop'),'dragover',e=>{e.preventDefault();$('drop').classList.add('over')});
 hook($('drop'),'dragleave',()=>$('drop').classList.remove('over'));
 hook($('drop'),'drop',e=>{e.preventDefault();$('drop').classList.remove('over');if(e.dataTransfer.files.length)handle(e.dataTransfer.files[0])});
 hook($('fi'),'change',()=>{if($('fi').files.length)handle($('fi').files[0])});
 hook($('fiX'),'click',rst);
+
+function pdfModeValue(){
+  const el=document.querySelector('input[name="pdfMode"]:checked');
+  return el?el.value:'text';
+}
+
+function updatePdfMode(){
+  const e=sf?ext(sf.name):'';
+  const show=e==='pdf'&&(st==='docx'||st==='html');
+  $('pdfMode').classList.toggle('show',show);
+  if(show){
+    $('pdfModeHint').textContent=st==='docx'
+      ?'文本优先生成可编辑 Word；版式优先把每页嵌入 Word，最接近原 PDF。'
+      :'文本优先提取正文结构；版式优先输出页面图片，视觉最稳。';
+  }
+}
 
 function handle(f){
   sf=f;st=null;const e=ext(f.name);
@@ -439,10 +479,10 @@ function handle(f){
     routes.forEach(r=>{
       const b=document.createElement('div');b.className='fb';
       b.innerHTML=`<span class="e">.${r.f}</span><span class="n">${r.n}</span>`;
-      b.onclick=()=>{st=r.f;$('fg').querySelectorAll('.fb').forEach(x=>x.classList.remove('on'));b.classList.add('on');$('go').classList.add('show')};
+      b.onclick=()=>{st=r.f;$('fg').querySelectorAll('.fb').forEach(x=>x.classList.remove('on'));b.classList.add('on');$('go').classList.add('show');updatePdfMode()};
       $('fg').appendChild(b);
     });
-    $('fs').classList.add('show');$('go').classList.remove('show');
+    $('fs').classList.add('show');$('go').classList.remove('show');updatePdfMode();
   }else{$('fg').innerHTML='<p style="color:var(--text3);font-size:13px;line-height:1.8">此格式暂不支持浏览器端转换<br><span style="font-size:12px">MOV/AVI/MKV 等请先用格式工厂或 FFmpeg 转为 MP4(H.264)</span></p>';$('fs').classList.add('show')}
 }
 
@@ -458,8 +498,8 @@ hook($('go'),'click',async()=>{
 
     // === PDF ===
     if(k==='pdf->txt'){try{blob=await pdf2txt(sf)}catch(e){throw new Error('PDF 解析失败: '+e.message)}}
-    else if(k==='pdf->docx'){try{blob=await pdf2docx(sf)}catch(e){throw new Error('PDF 转 Word 失败: '+e.message)}}
-    else if(k==='pdf->html'){try{blob=await pdf2html(sf)}catch(e){throw new Error('PDF 转 HTML 失败: '+e.message)}}
+    else if(k==='pdf->docx'){try{blob=pdfModeValue()==='layout'?await pdf2docxLayout(sf):await pdf2docx(sf)}catch(e){throw new Error('PDF 转 Word 失败: '+e.message)}}
+    else if(k==='pdf->html'){try{blob=pdfModeValue()==='layout'?await pdf2htmlLayout(sf):await pdf2html(sf)}catch(e){throw new Error('PDF 转 HTML 失败: '+e.message)}}
     else if(k==='pdf->png'||k==='pdf->jpg'||k==='pdf->jpeg')blob=await pdf2img(sf,st);
     // === Word ===
     else if(k==='docx->pdf'||k==='doc->pdf'){try{blob=await word2pdf(sf)}catch(e){throw new Error('Word 转 PDF 失败: '+e.message)}}
@@ -871,6 +911,31 @@ async function pdf2docx(f){
   return Packer.toBlob(doc);
 }
 
+async function pdf2docxLayout(f){
+  await ensureDocx();
+  $('progD').textContent='正在以版式优先模式渲染 PDF...';
+  const docPdf=await openPdf(f);
+  const{Document,Packer,Paragraph,ImageRun,AlignmentType}=docx;
+  const children=[];
+  try{
+    for(let i=1;i<=docPdf.numPages;i++){
+      $('progD').textContent=`正在渲染第 ${i}/${docPdf.numPages} 页...`;
+      const canvas=await renderPage(docPdf,i,2.2);
+      const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.94));
+      const bytes=new Uint8Array(await blob.arrayBuffer());
+      const ratio=canvas.height/canvas.width;
+      const width=620;
+      children.push(new Paragraph({
+        children:[new ImageRun({data:bytes,transformation:{width,height:Math.round(width*ratio)},type:'jpg'})],
+        alignment:AlignmentType.CENTER,
+        spacing:{after:260}
+      }));
+    }
+  }finally{try{docPdf.destroy()}catch(e){}}
+  const out=new Document({sections:[{properties:{page:{margin:{top:720,right:720,bottom:720,left:720}}},children}]});
+  return Packer.toBlob(out);
+}
+
 async function pdf2html(f){
   const pages=await pdfPages(f);
   const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -901,6 +966,21 @@ async function pdf2html(f){
   return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${f.name}</title><style>*{margin:0;box-sizing:border-box}body{background:#f7f7f5;padding:24px 16px;font-family:system-ui,sans-serif}</style></head><body>${body}</body></html>`],{type:'text/html;charset=utf-8'});
 }
 
+async function pdf2htmlLayout(f){
+  $('progD').textContent='正在以版式优先模式生成 HTML...';
+  const doc=await openPdf(f);
+  const pages=[];
+  try{
+    for(let i=1;i<=doc.numPages;i++){
+      $('progD').textContent=`正在渲染第 ${i}/${doc.numPages} 页...`;
+      const canvas=await renderPage(doc,i,2.2);
+      pages.push(`<section class="page"><img src="${canvas.toDataURL('image/jpeg',0.94)}" alt="第 ${i} 页"></section>`);
+    }
+  }finally{try{doc.destroy()}catch(e){}}
+  const html=`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${f.name}</title><style>*{box-sizing:border-box}body{margin:0;padding:24px 12px;background:#eceff3;font-family:system-ui,"Microsoft YaHei",sans-serif}.page{max-width:980px;margin:0 auto 22px;background:#fff;box-shadow:0 10px 30px rgba(15,23,42,.12);border-radius:8px;overflow:hidden}.page img{display:block;width:100%;height:auto}</style></head><body>${pages.join('')}</body></html>`;
+  return new Blob([html],{type:'text/html;charset=utf-8'});
+}
+
 // PDF → 图片 (渲染首页为高质量图片)
 async function pdf2img(f,tf){
   $('progD').textContent='正在渲染 PDF...';
@@ -923,7 +1003,8 @@ const WORD_STYLE_MAP=[
   "p[style-name='Quote'] => blockquote:fresh",
   "p[style-name='引用'] => blockquote:fresh"
 ];
-const WORD_CSS=`@page{size:A4;margin:18mm 16mm}*{box-sizing:border-box}body{font-family:"Plus Jakarta Sans","Microsoft YaHei","PingFang SC","Noto Sans SC",system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.82;color:#1f2933;background:#fff;font-size:15px}h1,h2,h3{font-family:"Plus Jakarta Sans","Microsoft YaHei",system-ui,sans-serif;line-height:1.28;letter-spacing:0;color:#111827;margin:1.35em 0 .65em}h1{font-size:30px;border-bottom:2px solid #e5e7eb;padding-bottom:10px}h2{font-size:23px;border-bottom:1px solid #edf0f3;padding-bottom:6px}h3{font-size:18px}p{margin:.62em 0;orphans:2;widows:2}ul,ol{padding-left:1.6em;margin:.65em 0}li{margin:.25em 0}table{border-collapse:collapse;width:100%;margin:18px 0;page-break-inside:auto}tr{page-break-inside:avoid;page-break-after:auto}th,td{border:1px solid #d8dee6;padding:8px 10px;text-align:left;vertical-align:top}th{background:#f5f7fa;font-weight:700}code,kbd{font-family:"JetBrains Mono","Consolas",monospace;background:#f4f6f8;padding:2px 5px;border-radius:4px;font-size:.92em}pre{background:#f6f8fa;padding:14px;border-radius:8px;overflow-x:auto;border:1px solid #e5e7eb;white-space:pre-wrap}pre code{background:0 0;padding:0}blockquote{border-left:4px solid #a78bfa;margin:14px 0;padding:8px 16px;background:#faf7ff;color:#4b5563}img{max-width:100%;height:auto;display:block;margin:12px auto}a{color:#2563eb;text-decoration:none}.doc-page{background:#fff}`;
+const DOC_EXPORT_CSS=`@page{size:A4;margin:18mm 16mm}*{box-sizing:border-box}body{font-family:"Plus Jakarta Sans","Microsoft YaHei","PingFang SC","Noto Sans SC",system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.82;color:#1f2933;background:#fff;font-size:15px}h1,h2,h3{font-family:"Plus Jakarta Sans","Microsoft YaHei",system-ui,sans-serif;line-height:1.28;letter-spacing:0;color:#111827;margin:1.35em 0 .65em}h1{font-size:30px;border-bottom:2px solid #e5e7eb;padding-bottom:10px}h2{font-size:23px;border-bottom:1px solid #edf0f3;padding-bottom:6px}h3{font-size:18px}p{margin:.62em 0;orphans:2;widows:2}ul,ol{padding-left:1.6em;margin:.65em 0}li{margin:.25em 0}table{border-collapse:collapse;width:100%;margin:18px 0;page-break-inside:auto}tr{page-break-inside:avoid;page-break-after:auto}th,td{border:1px solid #d8dee6;padding:8px 10px;text-align:left;vertical-align:top}th{background:#f5f7fa;font-weight:700}code,kbd{font-family:"JetBrains Mono","Consolas",monospace;background:#f4f6f8;padding:2px 5px;border-radius:4px;font-size:.92em}pre{background:#f6f8fa;padding:14px;border-radius:8px;overflow-x:auto;border:1px solid #e5e7eb;white-space:pre-wrap}pre code{background:0 0;padding:0}blockquote{border-left:4px solid #a78bfa;margin:14px 0;padding:8px 16px;background:#faf7ff;color:#4b5563}img{max-width:100%;height:auto;display:block;margin:12px auto}a{color:#2563eb;text-decoration:none}.doc-page{background:#fff}`;
+const WORD_CSS=DOC_EXPORT_CSS;
 
 function wordOptions(){
   return {
@@ -950,6 +1031,31 @@ function wordHtmlDocument(name,body){
   return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${name}</title><style>${WORD_CSS}</style></head><body><main class="doc-page">${body}</main></body></html>`;
 }
 
+async function docHtmlToPdf(html,title='output'){
+  await ensure('html2pdf');
+  const parsed=new DOMParser().parseFromString(html,'text/html');
+  const bodyHtml=parsed.body&&parsed.body.children.length?parsed.body.innerHTML:html;
+  const div=document.createElement('div');
+  div.className='doc-page';
+  div.innerHTML=bodyHtml;
+  div.style.cssText='background:#fff;color:#1f2933;font-family:"Plus Jakarta Sans","Microsoft YaHei","PingFang SC",system-ui,sans-serif;line-height:1.82;font-size:15px;width:794px;min-height:1123px;padding:54px 60px;word-break:break-word';
+  const style=document.createElement('style');
+  style.textContent=DOC_EXPORT_CSS+'.doc-page{margin:0 auto}';
+  document.head.appendChild(style);
+  document.body.appendChild(div);
+  div.querySelectorAll('img').forEach(img=>{img.style.maxWidth='100%';img.style.height='auto';img.style.display='block'});
+  div.querySelectorAll('table').forEach(t=>{t.style.width='100%';t.style.borderCollapse='collapse'});
+  try{
+    return await html2pdf().set({
+      margin:[0,0,0,0],
+      filename:(title||'output').replace(/\.[^.]+$/,'')+'.pdf',
+      pagebreak:{mode:['css','legacy'],avoid:['tr','img','blockquote','pre']},
+      html2canvas:{scale:2,useCORS:true,letterRendering:true,logging:false,backgroundColor:'#ffffff'},
+      jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}
+    }).from(div).outputPdf('blob');
+  }finally{document.body.removeChild(div);document.head.removeChild(style)}
+}
+
 async function word2html(f){
   const r=await readWordHtml(f);
   return new Blob([wordHtmlDocument(f.name,r.value)],{type:'text/html;charset=utf-8'});
@@ -964,29 +1070,10 @@ async function word2txt(f){
 }
 
 async function word2pdf(f){
-  await ensure('html2pdf');
   $('progD').textContent='正在解析 Word 文档...';
   const r=await readWordHtml(f);
   $('progD').textContent='正在渲染 PDF...';
-  const div=document.createElement('div');
-  div.className='doc-page';
-  div.innerHTML=r.value;
-  div.style.cssText='background:#fff;color:#1f2933;font-family:"Plus Jakarta Sans","Microsoft YaHei","PingFang SC",system-ui,sans-serif;line-height:1.82;font-size:15px;width:794px;min-height:1123px;padding:54px 60px;word-break:break-word';
-  const style=document.createElement('style');
-  style.textContent=WORD_CSS+'.doc-page{margin:0 auto}';
-  document.head.appendChild(style);
-  div.querySelectorAll('img').forEach(img=>{img.style.maxWidth='100%';img.style.height='auto';img.style.display='block'});
-  div.querySelectorAll('table').forEach(t=>{t.style.width='100%';t.style.borderCollapse='collapse'});
-  document.body.appendChild(div);
-  try{
-    return await html2pdf().set({
-      margin:[0,0,0,0],
-      filename:'output.pdf',
-      pagebreak:{mode:['css','legacy'],avoid:['tr','img','blockquote','pre']},
-      html2canvas:{scale:2,useCORS:true,letterRendering:true,logging:false,backgroundColor:'#ffffff'},
-      jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}
-    }).from(div).outputPdf('blob');
-  }finally{document.body.removeChild(div);document.head.removeChild(style)}
+  return docHtmlToPdf(r.value,f.name);
 }
 
 // ====== PPT Engine (canvas-based slide render) ======
@@ -1094,8 +1181,8 @@ async function ppt2png(f){
 const rd=readFileText;const rAB=f=>f.arrayBuffer();
 
 async function md2html(f){await ensure('marked');const md=await rd(f);return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${f.name}</title><style>body{font-family:'Plus Jakarta Sans','Microsoft YaHei',system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.9;color:#1a1a1a}h1,h2,h3{font-family:'Playfair Display',Georgia,serif;letter-spacing:-.02em;border-bottom:1px solid #eaeaea;padding-bottom:6px}code{background:#f4f4f2;padding:2px 6px;border-radius:4px;font-size:.9em}pre{background:#f8f8f7;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #eaeaea}pre code{background:0 0;padding:0}table{border-collapse:collapse;width:100%}th,td{border:1px solid #eaeaea;padding:10px 14px}th{background:#f8f8f7}blockquote{border-left:3px solid #d4d4d4;margin:0;padding:10px 20px;color:#6b6b6b}a{color:#6366f1}img{max-width:100%}</style></head><body>${marked.parse(md)}</body></html>`],{type:'text/html;charset=utf-8'})}
-async function md2pdf(f){await ensure('marked');await ensure('html2pdf');const md=await rd(f);const d=document.createElement('div');d.innerHTML=marked.parse(md);d.style.cssText='font-family:"Plus Jakarta Sans","Microsoft YaHei",system-ui,sans-serif;padding:24px;line-height:1.9;color:#1a1a1a;max-width:800px';document.body.appendChild(d);try{return await html2pdf().set({margin:[12,12,12,12],html2canvas:{scale:2},jsPDF:{unit:'mm',format:'a4'}}).from(d).outputPdf('blob')}finally{document.body.removeChild(d)}}
-async function html2pdf_(f){await ensure('html2pdf');const h=await rd(f);const ifr=document.createElement('iframe');ifr.style.cssText='position:fixed;left:-9999px;width:800px;height:600px';document.body.appendChild(ifr);ifr.srcdoc=h;await new Promise(r=>ifr.onload=r);await new Promise(r=>setTimeout(r,600));try{return await html2pdf().set({margin:[10,10,10,10],html2canvas:{scale:2},jsPDF:{unit:'mm',format:'a4'}}).from(ifr.contentDocument.body).outputPdf('blob')}finally{document.body.removeChild(ifr)}}
+async function md2pdf(f){await ensure('marked');const md=await rd(f);return docHtmlToPdf(marked.parse(md),f.name)}
+async function html2pdf_(f){const h=await rd(f);return docHtmlToPdf(h,f.name)}
 async function html2txt(f){const h=await rd(f);const d=document.createElement('div');d.innerHTML=h;return new Blob([d.textContent||''],{type:'text/plain;charset=utf-8'})}
 async function html2md(f){const h=await rd(f);const d=document.createElement('div');d.innerHTML=h;
   let m='',p='';
@@ -1438,7 +1525,7 @@ hook($('dropI'),'drop',e=>{e.preventDefault();$('dropI').classList.remove('over'
 hook($('fiI'),'change',()=>addI($('fiI').files));
 function addI(fs){Array.from(fs).forEach(f=>{if(f.type.startsWith('image/'))imf.push(f)});rI()}
 function rI(){$('il').innerHTML=imf.map((f,i)=>{const u=URL.createObjectURL(f);return`<div class="it"><img src="${u}"><button onclick="imf.splice(${i},1);rI()">x</button></div>`}).join('');$('goI').style.display=imf.length?'block':'none'}
-hook($('goI'),'click',async()=>{if(!imf.length)return;$('progI').classList.add('show');$('goI').disabled=true;try{const{jsPDF}=window.jspdf;let doc=null;for(const f of imf){const img=await loadImg(f);const w=img.naturalWidth,h=img.naturalHeight;if(!doc)doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});else doc.addPage([w,h],w>h?'landscape':'portrait');const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h)}show(doc.output('blob'),'图片合并.pdf',$('resI'))}catch(e){$('resI').innerHTML=`<div class="res-err">${e.message}</div>`;$('resI').classList.add('show')}finally{$('progI').classList.remove('show');$('goI').disabled=false}});
+hook($('goI'),'click',async()=>{if(!imf.length)return;$('progI').classList.add('show');$('goI').disabled=true;try{await ensure('jspdf');const{jsPDF}=window.jspdf;let doc=null;for(const f of imf){const img=await loadImg(f);const w=img.naturalWidth,h=img.naturalHeight;if(!doc)doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});else doc.addPage([w,h],w>h?'landscape':'portrait');const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h)}show(doc.output('blob'),'图片合并.pdf',$('resI'))}catch(e){$('resI').innerHTML=`<div class="res-err">${e.message}</div>`;$('resI').classList.add('show')}finally{$('progI').classList.remove('show');$('goI').disabled=false}});
 
 // Strands WebGL 动态背景 (纯 WebGL2, 无外部依赖)
 (function(){
