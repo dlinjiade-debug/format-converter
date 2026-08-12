@@ -1,0 +1,5 @@
+@aiden0z/pptx-renderer 1.2.4
+
+The browser bundle is vendored for offline file:// and GitHub Pages use.
+License: Apache-2.0. See pptx-renderer.LICENSE.txt.
+Source: https://github.com/aiden0z/pptx-renderer
