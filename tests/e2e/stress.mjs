@@ -1,60 +1,77 @@
-import { chromium } from 'playwright';
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { launchBrowser, repoFileUrl, repoPath } from './helpers.mjs';
 
-const files = process.argv.slice(2).length ? process.argv.slice(2) : [
-  'D:/单子/_kattbo .pptx',
-  'D:/format-converter/tests/fixtures/stress-text-25-16x9.pptx',
-  'D:/format-converter/tests/fixtures/stress-image-25-4x3.pptx',
-  'D:/format-converter/tests/fixtures/stress-mixed-40-16x9.pptx',
+const defaults = [
+  repoPath('tests', 'fixtures', 'stress-text-25-16x9.pptx'),
+  repoPath('tests', 'fixtures', 'stress-image-25-4x3.pptx'),
+  repoPath('tests', 'fixtures', 'stress-mixed-40-16x9.pptx'),
 ];
-const url = 'file://' + 'D:/format-converter/index.html';
+const files = process.argv.slice(2).length ? process.argv.slice(2).map(resolve) : defaults;
 
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 const page = await browser.newPage();
 const pageErrors = [];
-page.on('pageerror', e => pageErrors.push(e.message));
-await page.goto(url, { waitUntil: 'load' });
+const externalRequests = [];
+page.on('pageerror', error => pageErrors.push(error.message));
+page.on('request', request => { if (/^https?:/i.test(request.url())) externalRequests.push(request.url()); });
+await page.goto(repoFileUrl('index.html'), { waitUntil: 'load' });
 await page.waitForFunction(() => typeof window.ensure === 'function', { timeout: 15000 });
-await page.evaluate(async () => { await window.ensure('JSZip'); await window.ensure('jspdf'); });
-await page.waitForFunction(() => typeof window.JSZip !== 'undefined' && typeof window.jspdf !== 'undefined', { timeout: 30000 });
 
-console.log('文件 | 页数 | 解析ms | 渲染ms | 导出ms | PDF(KB) | 图片形状 | 非白页/总页 | 报错');
-console.log('---');
-let allOk = true;
-for (const f of files) {
-  let b64;
-  try { b64 = readFileSync(f).toString('base64'); }
-  catch (e) { console.log(`${f} 读取失败: ${e.message}`); allOk = false; continue; }
-  const r = await page.evaluate(async (b64) => {
-    const bin = atob(b64); const u = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-    const file = new File([u], 'x.pptx');
-    const t0 = performance.now();
+const results = [];
+for (const filePath of files) {
+  const b64 = readFileSync(filePath).toString('base64');
+  const result = await page.evaluate(async base64 => {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const file = new File([bytes], 'stress.pptx', {
+      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    });
     const slides = await window.pptParse(file);
-    const parseMs = performance.now() - t0;
-    let nonWhite = 0, blankPages = 0, imgShapes = 0;
-    const t1 = performance.now();
-    for (const s of slides) {
-      imgShapes += s.shapes.filter(sh => sh.img && (sh.img.byteLength ?? sh.img.size) > 0).length;
-      const c = await window.pptRenderSlide(s);
-      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-      let nw = 0; for (let p = 0; p < d.length; p += 4) if (!(d[p] > 250 && d[p+1] > 250 && d[p+2] > 250)) nw++;
-      if (nw === 0) blankPages++; nonWhite += nw;
+    const started = performance.now();
+    const blob = await window.ppt2pdf(file);
+    const pdfMs = performance.now() - started;
+    const pdf = await window.openPdf(blob);
+    const pages = [];
+    try {
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+        const pdfPage = await pdf.getPage(pageNumber);
+        const viewport = pdfPage.getViewport({ scale: 1 });
+        const canvas = await window.renderPage(pdf, pageNumber, 0.25);
+        const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+        let nonWhite = 0;
+        for (let p = 0; p < pixels.length; p += 4) {
+          if (!(pixels[p] > 250 && pixels[p + 1] > 250 && pixels[p + 2] > 250)) nonWhite++;
+        }
+        pages.push({ width: viewport.width, height: viewport.height, nonWhite });
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+    } finally {
+      await pdf.destroy();
     }
-    const renderMs = performance.now() - t1;
-    const t2 = performance.now();
-    let pdfSize = 0, pdfErr = '';
-    try { pdfSize = (await window.ppt2pdf(file)).size; } catch (e) { pdfErr = String(e && e.message || e); }
-    const pdfMs = performance.now() - t2;
-    return { count: slides.length, parseMs, renderMs, pdfMs, pdfSize, imgShapes, blankPages, pdfErr };
+    return {
+      inputPages: slides.length,
+      pdfPages: pages.length,
+      pdfMs,
+      pdfSize: blob.size,
+      slideRatio: slides[0] ? slides[0].w / slides[0].h : 0,
+      pageRatios: pages.map(pageInfo => pageInfo.width / pageInfo.height),
+      nonWhite: pages.map(pageInfo => pageInfo.nonWhite),
+    };
   }, b64);
-  const ok = r.count > 0 && r.blankPages === 0 && r.pdfSize > 0 && !r.pdfErr;
-  if (!ok) allOk = false;
-  console.log(
-    `${f.split('/').pop()} | ${r.count} | ${r.parseMs.toFixed(0)} | ${r.renderMs.toFixed(0)} | ${r.pdfMs.toFixed(0)} | ${(r.pdfSize/1024).toFixed(0)} | ${r.imgShapes} | ${r.count - r.blankPages}/${r.count} | ${r.pdfErr || '无'}` + (ok ? ' ✅' : ' ❌')
-  );
+  results.push({ file: filePath, ...result });
 }
+
 await browser.close();
-if (pageErrors.length) console.log('\n页面级错误:', pageErrors.slice(0,5).join(' | '));
-console.log('\n' + (allOk ? '✅ 压测全部通过：无空白、无报错' : '❌ 存在失败项，需排查'));
+const allOk = results.every(result => result.inputPages > 0
+  && result.pdfPages === result.inputPages
+  && result.pdfSize > 0
+  && result.nonWhite.every(value => value > 50)
+  && result.pageRatios.every(ratio => Math.abs(ratio - result.slideRatio) < 0.01))
+  && pageErrors.length === 0 && externalRequests.length === 0;
+
+console.log(JSON.stringify({ results, pageErrors, externalRequests }, null, 2));
+console.log(allOk ? 'PPT final artifact stress test passed' : 'PPT final artifact stress test failed');
 process.exit(allOk ? 0 : 1);

@@ -1,1 +1,7 @@
-# 没有需要忽略的文件
+# Generated dependencies, browser downloads, exports and debug artifacts
+node_modules/
+.pw-browsers/
+.workbuddy/
+math-tutor-deck/
+output/
+tests/e2e/debug/

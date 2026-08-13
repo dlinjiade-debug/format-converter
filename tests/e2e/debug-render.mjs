@@ -1,52 +1,49 @@
-import { chromium } from 'playwright';
-import { readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { launchBrowser, repoFileUrl, repoPath } from './helpers.mjs';
 
-const pptxPath = process.argv[2] || 'D:/单子/_kattbo .pptx';
-const url = 'file://' + 'D:/format-converter/index.html';
-const NODE = 'C:/Users/34472/.workbuddy/binaries/node/versions/22.22.2/node.exe';
+const pptxPath = resolve(process.argv[2] || repoPath('tests', 'fixtures', 'stress-text-25-16x9.pptx'));
+const outputDir = repoPath('tests', 'e2e', 'debug');
+mkdirSync(outputDir, { recursive: true });
+const b64 = readFileSync(pptxPath).toString('base64');
 
-mkdirSync('D:/format-converter/tests/e2e/debug', { recursive: true });
-const buf = readFileSync(pptxPath);
-const b64 = buf.toString('base64');
-
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 const page = await browser.newPage();
-await page.goto(url, { waitUntil: 'load' });
+await page.goto(repoFileUrl('index.html'), { waitUntil: 'load' });
 await page.waitForFunction(() => typeof window.ensure === 'function', { timeout: 15000 });
 await page.evaluate(async () => { await window.ensure('JSZip'); await window.ensure('jspdf'); });
-await page.waitForFunction(() => typeof window.JSZip !== 'undefined' && typeof window.jspdf !== 'undefined', { timeout: 30000 });
 
-const out = await page.evaluate(async (b64) => {
-  const bin = atob(b64); const u = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-  const file = new File([u], 'sample.pptx');
+const out = await page.evaluate(async base64 => {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const file = new File([bytes], 'sample.pptx');
   const slides = await window.pptParse(file);
-  const sf = 2;
   const dump = [];
+  const pngs = [];
   for (let i = 0; i < Math.min(2, slides.length); i++) {
-    const s = slides[i];
-    const c = await window.pptRenderSlide(s);
-    const png = c.toDataURL('image/png');
-    const shapes = s.shapes.map(sh => ({
-      type: sh.img ? 'pic' : (sh.text ? 'text' : 'other'),
-      xEMU: sh.x, yEMU: sh.y, wEMU: sh.w, hEMU: sh.h,
-      xpx: Math.round(sh.x/9525*sf), ypx: Math.round(sh.y/9525*sf),
-      wpx: Math.round(sh.w/9525*sf), hpx: Math.round(sh.h/9525*sf),
-      text: sh.text ? sh.text.slice(0,20) : ''
-    }));
-    dump.push({ slide: i+1, cw: c.width, ch: c.height, swEMU: s.w, shEMU: s.h, shapes });
-    // 保存 PNG（去掉 data:前缀）
-    window.__save = window.__save || [];
-    window.__pngs = window.__pngs || [];
-    window.__pngs.push(png);
+    const slide = slides[i];
+    const canvas = await window.pptRenderSlide(slide);
+    pngs.push(canvas.toDataURL('image/png'));
+    dump.push({
+      slide: i + 1,
+      canvas: { width: canvas.width, height: canvas.height },
+      slideSize: { width: slide.w, height: slide.h },
+      shapes: slide.shapes.map(shape => ({
+        type: shape.img ? 'picture' : (shape.text ? 'text' : 'other'),
+        x: shape.x, y: shape.y, width: shape.w, height: shape.h,
+        text: shape.text ? shape.text.slice(0, 80) : '',
+      })),
+    });
+    canvas.width = 0;
+    canvas.height = 0;
   }
-  return { dump, pngs: window.__pngs };
+  return { dump, pngs };
 }, b64);
 
-out.pngs.forEach((png, i) => {
-  const data = png.split(',')[1];
-  writeFileSync(`D:/format-converter/tests/e2e/debug/slide${i+1}.png`, Buffer.from(data, 'base64'));
+out.pngs.forEach((png, index) => {
+  writeFileSync(resolve(outputDir, `slide${index + 1}.png`), Buffer.from(png.split(',')[1], 'base64'));
 });
-writeFileSync('D:/format-converter/tests/e2e/debug/layout.json', JSON.stringify(out.dump, null, 1));
-console.log('已保存 layout.json (slide1/2 全部 shape 坐标) 与 slide1.png / slide2.png');
+writeFileSync(resolve(outputDir, 'layout.json'), JSON.stringify(out.dump, null, 2));
 await browser.close();
+console.log(`Debug output written to ${outputDir}`);

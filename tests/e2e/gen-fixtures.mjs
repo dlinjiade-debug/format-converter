@@ -1,7 +1,8 @@
 import { createRequire } from 'module';
 import { writeFileSync, mkdirSync } from 'fs';
+import { repoPath } from './paths.mjs';
 const require = createRequire(import.meta.url);
-const JSZip = require('D:/format-converter/lib/jszip.min.js');
+const JSZip = require(repoPath('lib', 'jszip.min.js'));
 
 // 1x1 彩色 PNG（base64），绘制时拉伸铺满，足以验证图片渲染
 const PNG_B64 = {
@@ -82,12 +83,12 @@ async function build(name, { pages, ratio, kind }){
     zip.file(`ppt/slides/_rels/slide${i}.xml.rels`, slideRels(withImg));
   }
   const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
-  const out = `D:/format-converter/tests/fixtures/${name}`;
+  const out = repoPath('tests', 'fixtures', name);
   writeFileSync(out, buf);
   console.log(`生成 ${name}: ${pages}页 ${ratio} ${kind} (${(buf.length/1024).toFixed(1)} KB)`);
 }
 
-mkdirSync('D:/format-converter/tests/fixtures', { recursive: true });
+mkdirSync(repoPath('tests', 'fixtures'), { recursive: true });
 await build('stress-text-25-16x9.pptx',     { pages: 25, ratio: '16x9', kind: 'text'  });
 await build('stress-image-25-4x3.pptx',     { pages: 25, ratio: '4x3',  kind: 'image' });
 await build('stress-mixed-40-16x9.pptx',    { pages: 40, ratio: '16x9', kind: 'mixed' });

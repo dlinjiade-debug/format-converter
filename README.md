@@ -83,16 +83,38 @@ PPT 里**整页图片型幻灯片**（常见于设计稿/海报/截图导出）�
 - 视频/音频转换首次需要加载 FFmpeg.wasm 核心文件（约 25MB），请耐心等待
 - 建议使用 Chrome/Edge/Firefox 最新版本
 - 处理大文件时请确保有足够内存
-## Conversion stability notes
 
-- PPT to PDF first uses the pinned local `@aiden0z/pptx-renderer` 1.2.4 browser build. The original Apache-2.0 license is kept at `lib/pptx-renderer.LICENSE.txt`; the runtime does not request a CDN. The older parser remains as a visible-warning fallback.
-- PDF to Word has text-first and layout-first modes. Image-only PDFs are kept page-by-page as complete page images and report that the body is not editable; OCR is intentionally not bundled.
-- Word to PDF uses an HTML/CSS print layer with explicit page-break markers, image/font readiness checks, and `break-inside: avoid` rules.
+## 转换稳定性说明
 
-Browser regression commands (set `PLAYWRIGHT_BROWSERS_PATH=.pw-browsers` on Windows before running them):
+- PPT→PDF 优先使用固定版本的本地 `@aiden0z/pptx-renderer` 1.2.4；旧解析器保留为 fallback。遇到 3D、动画、OLE、部分 EMF/WMF 等能力时会显示 warning，不会静默生成空白页。
+- PDF→Word 提供文本优先和版式优先两种模式。图片型 PDF 会逐页嵌入完整页面图，并明确提示“正文不可编辑”；项目不内置 OCR。
+- Word→PDF 使用 HTML/CSS 中间层，等待图片和字体加载，保留表格、图片、分页，并使用 `break-inside: avoid` 降低空白页、裁切和重叠风险。
+- 所有文档 HTML 进入 DOM 或导出前都会经过本地 DOMPurify 清理；文件名和错误信息不会直接作为 HTML 插入。
 
-- `node tests/conversion-quality.test.js`
-- `node tests/e2e/verify-ppt.mjs tests/fixtures/stress-text-25-16x9.pptx 25`
-- `node tests/e2e/verify-pdf.mjs`
-- `node tests/e2e/verify-pdf-text.mjs`
-- `node tests/e2e/verify-word.mjs`
+## 自动化验证
+
+需要 Node.js 20+。首次运行先安装依赖和 Chromium：
+
+```bash
+npm ci
+# Windows PowerShell: $env:PLAYWRIGHT_BROWSERS_PATH='.pw-browsers'
+npx playwright install chromium
+npm run test:all
+```
+
+Windows PowerShell 若执行策略拦截 `npm`，可将上述命令中的 `npm` 改为 `npm.cmd`。也可以分开运行：
+
+```bash
+npm run test:ppt       # 25 页真实 PPT→PDF 页数、比例、非白页、页序
+npm run test:pdf       # 图片型 PDF→Word
+npm run test:security  # HTML 清理、外链拦截、Blob URL 释放
+npm run test:stress    # 25/25/40 页 PPT 批量压测
+```
+
+测试浏览器默认缓存到项目内的 `.pw-browsers/`，不会写入 C 盘；该目录、`node_modules/`、导出文件和调试截图均被 `.gitignore` 排除。第三方包的来源、许可证和 SHA-256 见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+
+## 已知限制
+
+- 图片型 PDF 不做 OCR，因此页面图完整但正文不可编辑。
+- 复杂 PowerPoint 的 3D、动画、OLE、部分 EMF/WMF 和高级图表效果可能降级，并通过 warning 告知。
+- 浏览器端转换受内存限制；大文件或高页数文档建议分批处理。

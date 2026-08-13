@@ -1,13 +1,12 @@
-import { chromium } from 'playwright';
+import { launchBrowser, repoFileUrl } from './helpers.mjs';
 
-const url = 'file://D:/format-converter/index.html';
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 const page = await browser.newPage();
 const errors = [];
 page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 page.on('pageerror', error => errors.push(`PAGEERROR: ${error.message}`));
 
-await page.goto(url, { waitUntil: 'load' });
+await page.goto(repoFileUrl('index.html'), { waitUntil: 'load' });
 await page.waitForFunction(() => typeof window.ensure === 'function', { timeout: 15000 });
 await page.evaluate(async () => {
   await window.ensure('JSZip');
@@ -36,7 +35,7 @@ const pdfBase64 = await page.evaluate(() => {
   return btoa(binary);
 });
 
-const result = await page.evaluate(async (base64) => {
+const result = await page.evaluate(async base64 => {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);

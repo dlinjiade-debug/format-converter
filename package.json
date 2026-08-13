@@ -10,7 +10,11 @@
   "scripts": {
     "test": "node tests/conversion-quality.test.js",
     "test:ppt": "node tests/e2e/verify-ppt.mjs",
-    "test:pdf": "node tests/e2e/verify-pdf.mjs"
+    "test:pdf": "node tests/e2e/verify-pdf.mjs",
+    "test:security": "node tests/e2e/security.mjs",
+    "test:e2e": "npm run test:security && npm run test:pdf && node tests/e2e/verify-pdf-text.mjs && node tests/e2e/verify-word.mjs && npm run test:ppt",
+    "test:stress": "node tests/e2e/stress.mjs",
+    "test:all": "npm test && npm run test:e2e && npm run test:stress"
   },
   "repository": {
     "type": "git",
@@ -23,7 +27,8 @@
     "url": "https://github.com/dlinjiade-debug/format-converter/issues"
   },
   "homepage": "https://github.com/dlinjiade-debug/format-converter#readme",
-  "dependencies": {
-    "playwright": "^1.47.2"
+  "devDependencies": {
+    "dompurify": "3.4.12",
+    "playwright": "1.47.2"
   }
 }
