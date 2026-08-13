@@ -1,0 +1,8 @@
+Noto Sans SC is Copyright 2022 The Noto Project Authors.
+
+This test subset is redistributed under the SIL Open Font License, Version 1.1.
+The complete license text is available at:
+https://scripts.sil.org/OFL
+
+This file is a small test-only subset generated from the system NotoSansSC-VF.ttf
+font and contains only the glyphs needed by the PDF/Word Chinese regression.

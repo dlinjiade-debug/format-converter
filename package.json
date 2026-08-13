@@ -1,0 +1,34 @@
+{
+  "name": "format-converter",
+  "version": "1.0.0",
+  "description": "一个纯浏览器端的文件格式转换工具，无需安装任何软件，打开网页即可使用。",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "node tests/conversion-quality.test.js",
+    "test:ppt": "node tests/e2e/verify-ppt.mjs",
+    "test:pdf": "node tests/e2e/verify-pdf.mjs",
+    "test:security": "node tests/e2e/security.mjs",
+    "test:e2e": "npm run test:security && npm run test:pdf && node tests/e2e/verify-pdf-text.mjs && node tests/e2e/verify-word.mjs && npm run test:ppt",
+    "test:stress": "node tests/e2e/stress.mjs",
+    "test:all": "npm test && npm run test:e2e && npm run test:stress"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dlinjiade-debug/format-converter.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dlinjiade-debug/format-converter/issues"
+  },
+  "homepage": "https://github.com/dlinjiade-debug/format-converter#readme",
+  "devDependencies": {
+    "dompurify": "3.4.12",
+    "playwright": "1.47.2"
+  }
+}

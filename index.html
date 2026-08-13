@@ -4,13 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>linjiade 的转换器</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://cdn.jsdelivr.net">
-<link rel="preconnect" href="https://unpkg.com">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔄</text></svg>">
-<script>if(typeof pdfjsLib!=='undefined'){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'}</script>
-<script>async function ensureDocx(){if(typeof docx!=='undefined'&&docx.Document)return;await new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://unpkg.com/docx@8.5.0/build/index.umd.js';s.onload=ok;s.onerror=()=>no(new Error('docx'));document.head.appendChild(s)})}</script>
+<script>if(typeof pdfjsLib!=='undefined'){pdfjsLib.GlobalWorkerOptions.workerSrc='lib/pdf.worker.min.js'}</script>
+<script>async function ensureDocx(){if(typeof docx!=='undefined'&&docx.Document)return;await new Promise((ok,no)=>{const s=document.createElement('script');s.src='lib/docx.index.umd.js';s.onload=ok;s.onerror=()=>no(new Error('docx'));document.head.appendChild(s)})}</script>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -323,17 +319,21 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
 </div>
 
 <script>
-// ====== Lazy loading: CDN libraries are loaded only when needed ======
+// ====== Lazy loading: local libraries are loaded only when needed ======
 const LIBS={
-  mammoth:'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js',
-  jspdf:'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js',
-  html2pdf:'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js',
-  XLSX:'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
-  PDFLib:'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js',
-  JSZip:'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
-  marked:'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
-  lamejs:'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js',
-  heic2any:'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js'
+  mammoth:'lib/mammoth.browser.min.js',
+  jspdf:'lib/jspdf.umd.min.js',
+  html2pdf:'lib/html2pdf.bundle.min.js',
+  XLSX:'lib/xlsx.full.min.js',
+  PDFLib:'lib/pdf-lib.min.js',
+  JSZip:'lib/jszip.min.js',
+  marked:'lib/marked.min.js',
+  // DOMPurify 3.4.12, Apache-2.0/MPL-2.0; local-only rich-text sanitization.
+  DOMPurify:'lib/purify.min.js',
+  lamejs:'lib/lame.min.js',
+  heic2any:'lib/heic2any.min.js',
+  // @aiden0z/pptx-renderer 1.2.4, Apache-2.0; kept local for file:// offline use.
+  PptxRenderer:'lib/pptx-renderer.browser.iife.js'
 };
 const _libLoaded={};
 function ensure(name){
@@ -344,7 +344,7 @@ function ensure(name){
     const s=document.createElement('script');
     s.src=LIBS[name];
     s.onload=()=>ok(window[name]);
-    s.onerror=()=>no(new Error(name+' 库加载失败，请检查网络后重试'));
+    s.onerror=()=>no(new Error(name+' 本地库加载失败，请确认 lib/ 文件完整后重试'));
     document.head.appendChild(s);
   });
   return _libLoaded[name];
@@ -445,7 +445,59 @@ document.querySelectorAll('.tab').forEach(t=>{
 
 // ====== Format Conversion ======
 let sf=null,st=null;
-function rst(){sf=null;st=null;$('fi2').classList.remove('show');$('fs').classList.remove('show');$('pdfMode').classList.remove('show');$('go').classList.remove('show');$('prog').classList.remove('show');$('res').classList.remove('show');$('res').innerHTML='';$('fg').innerHTML='';$('fi').value='';$('bar').className='bar ok';$('progD').textContent=''}
+let lastConversionWarnings=[];
+const resultObjectUrls=new WeakMap();
+let imagePreviewUrls=[];
+function setConversionWarnings(warnings){
+  lastConversionWarnings=Array.from(new Set((warnings||[]).filter(Boolean).map(String)));
+  window.lastConversionWarnings=lastConversionWarnings.slice();
+}
+function htmlEscape(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function releaseResultUrl(container){
+  const url=container&&resultObjectUrls.get(container);
+  if(url){URL.revokeObjectURL(url);resultObjectUrls.delete(container)}
+}
+function clearImagePreviewUrls(){
+  imagePreviewUrls.forEach(url=>URL.revokeObjectURL(url));
+  imagePreviewUrls=[];
+}
+function sanitizeDocumentHtml(html){
+  if(typeof DOMPurify==='undefined')throw new Error('HTML 安全清洗库尚未加载');
+  const clean=DOMPurify.sanitize(String(html||''),{
+    USE_PROFILES:{html:true},
+    SANITIZE_DOM:true,
+    SANITIZE_NAMED_PROPS:true,
+    ALLOW_DATA_ATTR:false,
+    FORBID_TAGS:['script','style','iframe','object','embed','base','link','meta','form','input','button','textarea','select','option','video','audio','source','track'],
+    FORBID_ATTR:['srcset','ping','formaction','action','poster','background','autofocus']
+  });
+  const template=document.createElement('template');
+  template.innerHTML=clean;
+  template.content.querySelectorAll('*').forEach(element=>{
+    for(const attr of Array.from(element.attributes)){
+      const name=attr.name.toLowerCase();
+      const value=attr.value.trim();
+      if(name.startsWith('on'))element.removeAttribute(attr.name);
+      else if(['src','xlink:href'].includes(name)&&value&&!/^(?:data:image\/(?:png|gif|jpe?g|webp|bmp|svg\+xml);base64,|blob:|#)/i.test(value))element.removeAttribute(attr.name);
+      else if(name==='href'&&/^\s*(?:javascript|vbscript|data):/i.test(value))element.removeAttribute(attr.name);
+      else if(name==='style'&&/(?:url\s*\(|expression\s*\(|@import|behavior\s*:|-moz-binding)/i.test(value))element.removeAttribute(attr.name);
+    }
+  });
+  return template.innerHTML;
+}
+async function setSanitizedHtml(element,html){
+  await ensure('DOMPurify');
+  element.innerHTML=sanitizeDocumentHtml(html);
+  return element;
+}
+function showError(message,container=$('res')){
+  releaseResultUrl(container);
+  container.replaceChildren();
+  const error=document.createElement('div');error.className='res-err';error.textContent='转换失败：'+String(message||'未知错误');
+  const retry=document.createElement('button');retry.className='rst';retry.type='button';retry.textContent='重试';retry.addEventListener('click',rst);
+  container.append(error,retry);container.classList.add('show');
+}
+function rst(){setConversionWarnings([]);[$('res'),$('resM'),$('resI')].forEach(releaseResultUrl);clearImagePreviewUrls();sf=null;st=null;$('fi2').classList.remove('show');$('fs').classList.remove('show');$('pdfMode').classList.remove('show');$('go').classList.remove('show');$('prog').classList.remove('show');$('res').classList.remove('show');$('res').replaceChildren();$('fg').replaceChildren();$('fi').value='';$('bar').className='bar ok';$('progD').textContent=''}
 function hook(el,ev,fn){el.addEventListener(ev,fn)}
 hook($('drop'),'dragover',e=>{e.preventDefault();$('drop').classList.add('over')});
 hook($('drop'),'dragleave',()=>$('drop').classList.remove('over'));
@@ -490,6 +542,7 @@ hook($('go'),'click',async()=>{
   if(!sf||!st)return;
   $('go').disabled=true;$('prog').classList.add('show');$('bar').className='bar ok';$('bar').style.width='';
   $('progT').textContent='正在转换...';$('progD').textContent='';$('res').classList.remove('show');
+  setConversionWarnings([]);
   try{
     const e=ext(sf.name),k=e+'->'+st;
     let blob,out;
@@ -546,21 +599,38 @@ hook($('go'),'click',async()=>{
     $('bar').className='bar done';$('progT').textContent='转换完成';
     // 输出文件名: 优先用 blob._ext (视频转码可能改扩展名)
     out=sf.name.replace(/\.[^.]+$/,'')+'.'+(blob._ext||st);
-    show(blob,out,$('res'));
+    show(blob,out,$('res'),lastConversionWarnings);
   }catch(err){
     $('bar').className='bar err';$('progT').textContent='转换失败';
     $('progD').textContent=err.message;
-    $('res').innerHTML=`<div class="res-err">转换失败：${err.message}</div><button class="rst" onclick="rst()">重试</button>`;
-    $('res').classList.add('show');
+    showError(err.message,$('res'));
     console.error(err);
   }finally{$('go').disabled=false}
 });
 
-function show(blob,name,c){
+function show(blob,name,c,warnings=lastConversionWarnings){
+  releaseResultUrl(c);
   const u=URL.createObjectURL(blob);
-  c.innerHTML=`<div class="res-ok"><div class="ri"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><div class="rt">转换完成</div><div class="rs">${name} (${sz(blob.size)})</div><a class="dl" href="${u}" download="${name}">下载文件</a></div><button class="rst" onclick="rst()">转换其他文件</button>`;
+  resultObjectUrls.set(c,u);
+  c.replaceChildren();
+  const result=document.createElement('div');result.className='res-ok';
+  const icon=document.createElement('div');icon.className='ri';icon.textContent='✓';
+  const title=document.createElement('div');title.className='rt';title.textContent='转换完成';
+  const summary=document.createElement('div');summary.className='rs';summary.textContent=`${String(name)} (${sz(blob.size)})`;
+  const download=document.createElement('a');download.className='dl';download.href=u;download.download=String(name);download.textContent='下载文件';
+  result.append(icon,title,summary,download);
+  if(warnings&&warnings.length){
+    const box=document.createElement('div');
+    box.style.cssText='margin:14px auto 0;padding:12px 14px;text-align:left;border:1px solid rgba(245,158,11,.25);border-radius:10px;background:rgba(245,158,11,.08);color:#fbbf24;font-size:12px;line-height:1.7;max-width:620px';
+    const heading=document.createElement('b');heading.textContent='兼容性提示';
+    const list=document.createElement('ul');list.style.margin='6px 0 0 18px';
+    warnings.forEach(warning=>{const item=document.createElement('li');item.textContent=String(warning);list.appendChild(item)});
+    box.append(heading,list);result.appendChild(box);
+  }
+  const reset=document.createElement('button');reset.className='rst';reset.type='button';reset.textContent='转换其他文件';reset.addEventListener('click',rst);
+  c.append(result,reset);
   c.classList.add('show');
-  const a=document.createElement('a');a.href=u;a.download=name;a.click();
+  const a=document.createElement('a');a.href=u;a.download=String(name);a.click();
 }
 
 // ====== PDF Engine ======
@@ -569,11 +639,11 @@ async function loadPdfJs(){
   // 动态加载
   await new Promise((ok,no)=>{
     const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-    s.onload=ok;s.onerror=()=>no(new Error('PDF 引擎加载失败，请检查网络'));
+    s.src='lib/pdf.min.js';
+    s.onload=ok;s.onerror=()=>no(new Error('PDF 引擎本地加载失败，请确认 lib/pdf.min.js 完整'));
     document.head.appendChild(s);
   });
-  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc='lib/pdf.worker.min.js';
   return pdfjsLib;
 }
 
@@ -662,20 +732,76 @@ function looksLikeHeading(line,avgFontSize){
     (mostlyBold&&text.length<42);
 }
 
+function detectPdfColumns(lines,width){
+  const usable=lines.filter(line=>line&&line.text&&line.text.trim());
+  if(usable.length<6)return {count:1,columns:[{index:0}],lines};
+  const xs=usable.map(line=>line.x||0).sort((a,b)=>a-b);
+  let split=-1,gap=0;
+  for(let i=1;i<xs.length;i++)if(xs[i]-xs[i-1]>gap){gap=xs[i]-xs[i-1];split=i}
+  if(split<2||xs.length-split<2||gap<Math.max(48,width*.12))return {count:1,columns:[{index:0}],lines};
+  const pivot=(xs[split-1]+xs[split])/2;
+  const left=usable.filter(line=>(line.x||0)<=pivot);
+  const right=usable.filter(line=>(line.x||0)>pivot);
+  if(left.length<2||right.length<2)return {count:1,columns:[{index:0}],lines};
+  const ordered=[...left.map(line=>Object.assign(line,{columnIndex:0})),...right.map(line=>Object.assign(line,{columnIndex:1}))];
+  ordered.sort((a,b)=>(a.columnIndex-b.columnIndex)||(b.y-a.y)||(a.x-b.x));
+  return {count:2,columns:[{index:0,x:left[0]?.x||0},{index:1,x:right[0]?.x||0}],lines:ordered};
+}
+
+async function pdfPageImages(page){
+  try{
+    const ops=await page.getOperatorList();
+    const constants=window.pdfjsLib&&window.pdfjsLib.OPS||{};
+    const imageOps=new Set([constants.paintImageXObject,constants.paintImageXObjectRepeat,constants.paintJpegXObject,constants.paintInlineImageXObject].filter(Number.isFinite));
+    const images=[];
+    for(let index=0;index<(ops.fnArray||[]).length;index++){
+      if(!imageOps.has(ops.fnArray[index]))continue;
+      const args=ops.argsArray[index]||[];
+      const object=args[0];
+      let image=object;
+      if(typeof object==='string')try{image=page.objs.get(object)}catch(e){image=null}
+      images.push({index,object:image,width:Number(args[1])||image?.width||0,height:Number(args[2])||image?.height||0});
+    }
+    return images;
+  }catch(e){return []}
+}
+
+function repeatedPdfEdgeKeys(pages){
+  const counts=new Map();
+  const threshold=Math.max(2,Math.ceil(pages.length*.6));
+  pages.forEach(pg=>{
+    const seen=new Set();
+    (pg.fmtLines||[]).forEach(line=>{
+      const text=(line.text||'').replace(/\s+/g,' ').trim();
+      const nearEdge=line.y<Math.max(48,pg.height*.08)||line.y>pg.height-Math.max(48,pg.height*.08);
+      if(!text||text.length>100||!nearEdge)return;
+      const key=text.replace(/\d+/g,'#');
+      if(!seen.has(key)){seen.add(key);counts.set(key,(counts.get(key)||0)+1)}
+    });
+  });
+  return new Set(Array.from(counts.entries()).filter(([,count])=>count>=threshold).map(([key])=>key));
+}
+
 async function pdfPages(f){
   $('progD').textContent='正在打开 PDF...';
   const doc=await openPdf(f);
-  const total=doc.numPages;
-  if(total>80)throw new Error(`PDF 页数过多（${total}页），最多支持 80 页，请拆分后重试`);
-  const pages=[];
-  for(let i=1;i<=total;i++){
+  try{
+    const total=doc.numPages;
+    if(total>80)throw new Error(`PDF 页数过多（${total}页），最多支持 80 页，请拆分后重试`);
+    const pages=[];
+    for(let i=1;i<=total;i++){
     $('progD').textContent=`正在解析第 ${i}/${total} 页...`;
     try{
       const pg=await doc.getPage(i);
       const vp=pg.getViewport({scale:1});
       const tc=await pg.getTextContent();
       const items=(tc.items||[]).filter(it=>it.str&&it.str.trim());
-      if(!items.length){pages.push({text:'',hasText:false});continue}
+      const images=await pdfPageImages(pg);
+      const imageCount=images.length;
+      if(!items.length){
+        pages.push({pageNumber:i,text:'',hasText:false,fmtLines:[],columns:[],images,imageCount,width:vp.width,height:vp.height,warnings:imageCount?[]:['页面没有可提取文本或图片对象。']});
+        continue;
+      }
 
       // 动态行距阈值：基于平均字号
       const avgFont=items.reduce((s,it)=>s+Math.max(Math.abs(it.transform[3]||10),Math.abs(it.height||0),8),0)/items.length;
@@ -715,27 +841,186 @@ async function pdfPages(f){
       fmtLines.sort((a,b)=>b.y-a.y);
       for(let li=0;li<fmtLines.length-1;li++)fmtLines[li+1].gap=Math.abs(fmtLines[li].y-fmtLines[li+1].y);
 
-      const text=fmtLines.map(l=>l.text).filter(Boolean).join('\n').trim();
+      const columnInfo=detectPdfColumns(fmtLines,vp.width);
+      const orderedLines=columnInfo.lines;
+      const text=orderedLines.map(l=>l.text).filter(Boolean).join('\n').trim();
       // 图文混合检测: 文字少于3行的页面整体渲染为图片，保留视觉效果
-      const richLines=fmtLines.filter(l=>(l.text||'').replace(/\s/g,'').length>2).length;
-      pages.push({text,hasText:richLines>=3&&!!text,fmtLines,width:vp.width,height:vp.height,avgFont});
+      pages.push({pageNumber:i,text,hasText:!!text,fmtLines:orderedLines,columns:columnInfo.columns,images,imageCount,width:vp.width,height:vp.height,avgFont});
     }catch(e){
       console.warn(`Page ${i}:`,e);
-      pages.push({text:'',hasText:false});
+      pages.push({pageNumber:i,text:'',hasText:false,fmtLines:[],columns:[],images:[],imageCount:0,warnings:['页面解析失败，已使用页面图像降级。']});
     }
   }
-  pages._doc=doc;
-  return pages;
+    pages._warnings=[];
+    if(pages.length&&pages.every(page=>!page.hasText))pages._warnings.push('这是图片型 PDF：正文不可编辑，未启用 OCR；已按页嵌入完整页面图像。');
+    pages._doc=doc;
+    return pages;
+  }catch(error){
+    try{await doc.destroy()}catch(e){}
+    throw error;
+  }
 }
 
 async function pdf2txt(f){
   const pages=await pdfPages(f);
-  const text=pages.map(p=>p.text).filter(Boolean).join('\n\n');
-  if(!text)throw new Error('PDF 中没有可提取的文字（可能是扫描件/图片型 PDF）');
-  return new Blob([text],{type:'text/plain;charset=utf-8'});
+  try{
+    const text=pages.map(p=>p.text).filter(Boolean).join('\n\n');
+    if(!text)throw new Error('PDF 中没有可提取的文字（可能是扫描件/图片型 PDF）');
+    return new Blob([text],{type:'text/plain;charset=utf-8'});
+  }finally{try{await pages._doc.destroy()}catch(e){}}
+}
+
+function pdfSectionProperties(page,layout){
+  const width=Math.max(1,Math.round((page.width||595.28)*20));
+  const height=Math.max(1,Math.round((page.height||841.89)*20));
+  const margin=layout?0:720;
+  return {page:{size:{width,height},margin:{top:margin,right:margin,bottom:margin,left:margin}}};
+}
+
+function pdfLineRuns(line,TextRun){
+  const items=(line.items&&line.items.length?line.items:[{str:line.text||'',fontSize:12,fontName:'Microsoft YaHei'}]);
+  return items.map(item=>new TextRun({
+    text:item.str||'',
+    size:Math.max(14,Math.min(40,Math.round((item.fontSize||12)*2))),
+    font:item.fontName||'Microsoft YaHei',
+    bold:!!item.isBold,
+    italics:!!item.isItalic
+  }));
+}
+
+function pdfTextChildren(page,docxApi,repeatedKeys){
+  const{Paragraph,TextRun,HeadingLevel,AlignmentType,Table,TableRow,TableCell,WidthType}=docxApi;
+  const lines=(page.fmtLines||[]).filter(line=>{
+    const key=(line.text||'').replace(/\d+/g,'#').trim();
+    return !(key&&repeatedKeys.has(key));
+  });
+  const children=[];
+  let i=0;
+  while(i<lines.length){
+    const line=lines[i];
+    if(!line.text||!line.text.trim()){i++;continue}
+    if(line.items&&line.items.length>=2){
+      const signature=lineSignature(line);
+      const tableLines=[line];
+      let j=i+1;
+      while(j<lines.length&&lines[j].items&&lines[j].items.length>=2&&lineSignature(lines[j])===signature){tableLines.push(lines[j]);j++}
+      if(tableLines.length>=3){
+        const colCount=Math.max(...tableLines.map(row=>row.items.length));
+        const rows=tableLines.map(row=>new TableRow({children:Array.from({length:colCount},(_,index)=>{
+          const cell=row.items[index];
+          return new TableCell({children:[new Paragraph({children:[new TextRun({text:cell?.str||'',size:Math.max(14,Math.min(28,Math.round((cell?.fontSize||10)*2))),font:cell?.fontName||'Microsoft YaHei'})]})],width:{size:Math.floor(100/colCount),type:WidthType.PERCENTAGE}});
+        })}));
+        children.push(new Table({rows,width:{size:100,type:WidthType.PERCENTAGE}}));
+        i=j;continue;
+      }
+    }
+    const heading=looksLikeHeading(line,page.avgFont||12);
+    const runs=pdfLineRuns(line,TextRun);
+    children.push(new Paragraph({
+      children:runs,
+      heading:heading?HeadingLevel.HEADING_3:undefined,
+      alignment:heading?AlignmentType.LEFT:undefined,
+      spacing:heading?{before:160,after:80}:{after:80,line:320},
+      indent:heading?undefined:{left:Math.max(0,Math.min(720,Math.round(((line.x||0)/(page.width||600))*720)))}
+    }));
+    i++;
+  }
+  return children;
+}
+
+async function pdfPageImageRun(doc,pageNumber,page,docxApi,layout){
+  const{Paragraph,ImageRun,AlignmentType}=docxApi;
+  const canvas=await renderPage(doc,pageNumber,layout?2.2:2);
+  try{
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',layout?.94:.92));
+    if(!blob)throw new Error(`第 ${pageNumber} 页图像生成失败`);
+    const bytes=new Uint8Array(await blob.arrayBuffer());
+    const pageWidthPt=page.width||595.28;
+    const pageHeightPt=page.height||841.89;
+    const marginPt=layout?0:36;
+    const widthPx=Math.max(1,Math.round((pageWidthPt-marginPt*2)/72*96));
+    const heightPx=Math.max(1,Math.round((pageHeightPt-marginPt*2)/72*96));
+    return new Paragraph({children:[new ImageRun({data:bytes,transformation:{width:widthPx,height:heightPx},type:'jpg'})],alignment:AlignmentType.CENTER,spacing:{before:0,after:0}});
+  }finally{canvas.width=0;canvas.height=0}
+}
+
+async function pdfEmbeddedImageChildren(page,docxApi){
+  const{Paragraph,ImageRun,AlignmentType}=docxApi;
+  const children=[];
+  const maxWidth=Math.max(120,Math.round(((page.width||595.28)-72)/72*96));
+  for(const image of page.images||[]){
+    const object=image.object;
+    const width=Math.max(1,Number(image.width||object?.width)||1);
+    const height=Math.max(1,Number(image.height||object?.height)||1);
+    const canvas=document.createElement('canvas');
+    canvas.width=width;canvas.height=height;
+    try{
+      const ctx=canvas.getContext('2d');
+      if(object?.bitmap)ctx.drawImage(object.bitmap,0,0,width,height);
+      else if(object?.data&&object.data.length===width*height*4){
+        const data=object.data instanceof Uint8ClampedArray?object.data:new Uint8ClampedArray(object.data);
+        ctx.putImageData(new ImageData(data,width,height),0,0);
+      }else continue;
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+      if(!blob)continue;
+      const bytes=new Uint8Array(await blob.arrayBuffer());
+      const outWidth=Math.min(maxWidth,width);
+      const outHeight=Math.max(1,Math.round(outWidth*height/width));
+      children.push(new Paragraph({children:[new ImageRun({data:bytes,transformation:{width:outWidth,height:outHeight},type:'png'})],alignment:AlignmentType.CENTER,spacing:{before:80,after:80}}));
+    }finally{canvas.width=0;canvas.height=0}
+  }
+  return children;
+}
+
+async function pdf2docxResult(f,layout=false){
+  await ensureDocx();
+  const pages=await pdfPages(f);
+  const{Document,Packer,Paragraph,TextRun}=docx;
+  const warnings=[...(pages._warnings||[])];
+  const repeatedKeys=layout?new Set():repeatedPdfEdgeKeys(pages);
+  const sections=[];
+  let contentCount=0;
+  try{
+    for(let index=0;index<pages.length;index++){
+      const page=pages[index];
+      $('progD').textContent=`正在生成第 ${index+1}/${pages.length} 页 Word...`;
+      let children=[];
+      if(layout||!page.hasText){
+        try{children=[await pdfPageImageRun(pages._doc,index+1,page,{Paragraph,ImageRun:docx.ImageRun,AlignmentType:docx.AlignmentType},layout)];contentCount++}
+        catch(error){
+          warnings.push(`第 ${index+1} 页无法嵌入完整页面图像：${error.message}`);
+          children=[new Paragraph({children:[new TextRun({text:`[第 ${index+1} 页图像无法渲染]`,size:20,color:'888888',italics:true})]})];
+        }
+      }else{
+        children=pdfTextChildren(page,{Paragraph,TextRun,HeadingLevel:docx.HeadingLevel,AlignmentType:docx.AlignmentType,Table:docx.Table,TableRow:docx.TableRow,TableCell:docx.TableCell,WidthType:docx.WidthType},repeatedKeys);
+        if(page.imageCount){
+          try{
+            const imageChildren=await pdfEmbeddedImageChildren(page,{Paragraph,ImageRun:docx.ImageRun,AlignmentType:docx.AlignmentType});
+            children.push(...imageChildren);
+            if(imageChildren.length<page.imageCount)warnings.push(`第 ${index+1} 页有 ${page.imageCount-imageChildren.length} 个图片对象无法独立提取，已保留可编辑文字。`);
+          }catch(error){warnings.push(`第 ${index+1} 页图片提取失败，已保留可编辑文字：${error.message}`)}
+        }
+        if(children.length)contentCount++;
+        else{
+          try{children=[await pdfPageImageRun(pages._doc,index+1,page,{Paragraph,ImageRun:docx.ImageRun,AlignmentType:docx.AlignmentType},false)];contentCount++}
+          catch(error){children=[new Paragraph({children:[new TextRun({text:`[第 ${index+1} 页没有可编辑内容]`,size:20,color:'888888',italics:true})]})]}
+        }
+      }
+      sections.push({properties:pdfSectionProperties(page,layout),children});
+    }
+  }finally{if(pages._doc)try{await pages._doc.destroy()}catch(e){}}
+  if(!sections.length||!contentCount)throw new Error('PDF 中没有可转换的页面内容');
+  const document=new Document({sections});
+  return {blob:await Packer.toBlob(document),warnings};
 }
 
 async function pdf2docx(f){
+  const result=await pdf2docxResult(f,false);
+  setConversionWarnings(result.warnings);
+  return result.blob;
+}
+
+async function pdf2docxLegacy(f){
   await ensureDocx();
   $('progD').textContent='正在解析 PDF...';
   const pages=await pdfPages(f);
@@ -876,23 +1161,25 @@ async function pdf2docx(f){
       $('progD').textContent=`正在渲染第 ${pi+1} 页为图片...`;
       try{
         const canvas=await renderPage(pages._doc,pi+1,2);
-        const imgBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.92));
-        const imgBuf=await imgBlob.arrayBuffer();
-        const imgBytes=new Uint8Array(imgBuf);
-        const imgW=Math.round(canvas.width/2),imgH=Math.round(canvas.height/2);
-        const maxW=5486400;
-        const fW=Math.round(imgW*914400/72),fH=Math.round(imgH*914400/72);
-        const s=fW>maxW?maxW/fW:1;
-        children.push(new Paragraph({
-          children:[new ImageRun({
-            data:imgBytes,
-            transformation:{width:Math.round(fW*s/914400*72),height:Math.round(fH*s/914400*72)},
-            type:'jpg'
-          })],
-          alignment:AlignmentType.CENTER,
-          spacing:{after:200}
-        }));
-        hasAnyContent=true;
+        try{
+          const imgBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.92));
+          const imgBuf=await imgBlob.arrayBuffer();
+          const imgBytes=new Uint8Array(imgBuf);
+          const imgW=Math.round(canvas.width/2),imgH=Math.round(canvas.height/2);
+          const maxW=5486400;
+          const fW=Math.round(imgW*914400/72),fH=Math.round(imgH*914400/72);
+          const s=fW>maxW?maxW/fW:1;
+          children.push(new Paragraph({
+            children:[new ImageRun({
+              data:imgBytes,
+              transformation:{width:Math.round(fW*s/914400*72),height:Math.round(fH*s/914400*72)},
+              type:'jpg'
+            })],
+            alignment:AlignmentType.CENTER,
+            spacing:{after:200}
+          }));
+          hasAnyContent=true;
+        }finally{canvas.width=0;canvas.height=0}
       }catch(e){
         console.warn('Page render failed:',e);
         children.push(new Paragraph({
@@ -904,7 +1191,7 @@ async function pdf2docx(f){
   }
 
   // 关闭 PDF
-  if(pages._doc)try{pages._doc.destroy()}catch(e){}
+  if(pages._doc)try{await pages._doc.destroy()}catch(e){}
 
   if(!hasAnyContent)throw new Error('PDF 中没有可读取的内容');
   const doc=new Document({sections:[{properties:{page:{margin:{top:1440,right:1440,bottom:1440,left:1440}}},children}]});
@@ -912,6 +1199,12 @@ async function pdf2docx(f){
 }
 
 async function pdf2docxLayout(f){
+  const result=await pdf2docxResult(f,true);
+  setConversionWarnings(result.warnings);
+  return result.blob;
+}
+
+async function pdf2docxLayoutLegacy(f){
   await ensureDocx();
   $('progD').textContent='正在以版式优先模式渲染 PDF...';
   const docPdf=await openPdf(f);
@@ -921,17 +1214,19 @@ async function pdf2docxLayout(f){
     for(let i=1;i<=docPdf.numPages;i++){
       $('progD').textContent=`正在渲染第 ${i}/${docPdf.numPages} 页...`;
       const canvas=await renderPage(docPdf,i,2.2);
-      const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.94));
-      const bytes=new Uint8Array(await blob.arrayBuffer());
-      const ratio=canvas.height/canvas.width;
-      const width=620;
-      children.push(new Paragraph({
-        children:[new ImageRun({data:bytes,transformation:{width,height:Math.round(width*ratio)},type:'jpg'})],
-        alignment:AlignmentType.CENTER,
-        spacing:{after:260}
-      }));
+      try{
+        const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.94));
+        const bytes=new Uint8Array(await blob.arrayBuffer());
+        const ratio=canvas.height/canvas.width;
+        const width=620;
+        children.push(new Paragraph({
+          children:[new ImageRun({data:bytes,transformation:{width,height:Math.round(width*ratio)},type:'jpg'})],
+          alignment:AlignmentType.CENTER,
+          spacing:{after:260}
+        }));
+      }finally{canvas.width=0;canvas.height=0}
     }
-  }finally{try{docPdf.destroy()}catch(e){}}
+  }finally{try{await docPdf.destroy()}catch(e){}}
   const out=new Document({sections:[{properties:{page:{margin:{top:720,right:720,bottom:720,left:720}}},children}]});
   return Packer.toBlob(out);
 }
@@ -939,9 +1234,10 @@ async function pdf2docxLayout(f){
 async function pdf2html(f){
   const pages=await pdfPages(f);
   const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const hasText=pages.some(p=>p.hasText);
-  if(!hasText)throw new Error('PDF 中没有可提取的文字（可能是扫描件）');
-  const body=pages.map((pg,i)=>{
+  try{
+    const hasText=pages.some(p=>p.hasText);
+    if(!hasText)throw new Error('PDF 中没有可提取的文字（可能是扫描件）');
+    const body=pages.map((pg,i)=>{
     let html='';
     if(pg.fmtLines&&pg.fmtLines.length){
       pg.fmtLines.forEach(line=>{
@@ -951,7 +1247,7 @@ async function pdf2html(f){
           if(it.isBold)st.push('font-weight:700');
           if(it.isItalic)st.push('font-style:italic');
           st.push(`font-size:${it.fontSize}px`);
-          st.push(`font-family:"${it.fontName}","Microsoft YaHei",sans-serif`);
+          st.push(`font-family:"${htmlEscape(normFont(it.fontName))}","Microsoft YaHei",sans-serif`);
           return `<${tag} style="${st.join(';')}">${esc(it.str)}</${tag}>`;
         }).join('');
         html+=`<p style="margin:2px 0;line-height:1.8">${items||'&nbsp;'}</p>`;
@@ -962,8 +1258,8 @@ async function pdf2html(f){
     }
     return html;
   }).join('\n');
-  if(pages._doc)try{pages._doc.destroy()}catch(e){}
-  return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${f.name}</title><style>*{margin:0;box-sizing:border-box}body{background:#f7f7f5;padding:24px 16px;font-family:system-ui,sans-serif}</style></head><body>${body}</body></html>`],{type:'text/html;charset=utf-8'});
+    return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${htmlEscape(f.name)}</title><style>*{margin:0;box-sizing:border-box}body{background:#f7f7f5;padding:24px 16px;font-family:system-ui,sans-serif}</style></head><body>${body}</body></html>`],{type:'text/html;charset=utf-8'});
+  }finally{if(pages._doc)try{await pages._doc.destroy()}catch(e){}}
 }
 
 async function pdf2htmlLayout(f){
@@ -974,10 +1270,11 @@ async function pdf2htmlLayout(f){
     for(let i=1;i<=doc.numPages;i++){
       $('progD').textContent=`正在渲染第 ${i}/${doc.numPages} 页...`;
       const canvas=await renderPage(doc,i,2.2);
-      pages.push(`<section class="page"><img src="${canvas.toDataURL('image/jpeg',0.94)}" alt="第 ${i} 页"></section>`);
+      try{pages.push(`<section class="page"><img src="${canvas.toDataURL('image/jpeg',0.94)}" alt="第 ${i} 页"></section>`)}
+      finally{canvas.width=0;canvas.height=0}
     }
-  }finally{try{doc.destroy()}catch(e){}}
-  const html=`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${f.name}</title><style>*{box-sizing:border-box}body{margin:0;padding:24px 12px;background:#eceff3;font-family:system-ui,"Microsoft YaHei",sans-serif}.page{max-width:980px;margin:0 auto 22px;background:#fff;box-shadow:0 10px 30px rgba(15,23,42,.12);border-radius:8px;overflow:hidden}.page img{display:block;width:100%;height:auto}</style></head><body>${pages.join('')}</body></html>`;
+  }finally{try{await doc.destroy()}catch(e){}}
+  const html=`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlEscape(f.name)}</title><style>*{box-sizing:border-box}body{margin:0;padding:24px 12px;background:#eceff3;font-family:system-ui,"Microsoft YaHei",sans-serif}.page{max-width:980px;margin:0 auto 22px;background:#fff;box-shadow:0 10px 30px rgba(15,23,42,.12);border-radius:8px;overflow:hidden}.page img{display:block;width:100%;height:auto}</style></head><body>${pages.join('')}</body></html>`;
   return new Blob([html],{type:'text/html;charset=utf-8'});
 }
 
@@ -985,10 +1282,15 @@ async function pdf2htmlLayout(f){
 async function pdf2img(f,tf){
   $('progD').textContent='正在渲染 PDF...';
   const pages=await pdfPages(f);
-  const canvas=await renderPage(pages._doc,1,3);
-  if(pages._doc)try{pages._doc.destroy()}catch(e){}
-  const m={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg'};
-  return new Promise(r=>canvas.toBlob(r,m[tf]||'image/png',tf==='jpg'||tf==='jpeg'?.92:.95));
+  let canvas=null;
+  try{
+    canvas=await renderPage(pages._doc,1,3);
+    const m={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg'};
+    return await new Promise(r=>canvas.toBlob(r,m[tf]||'image/png',tf==='jpg'||tf==='jpeg'?.92:.95));
+  }finally{
+    canvas&& (canvas.width=0,canvas.height=0);
+    if(pages._doc)try{await pages._doc.destroy()}catch(e){}
+  }
 }
 
 // ====== Word Engine (mammoth) ======
@@ -1003,13 +1305,16 @@ const WORD_STYLE_MAP=[
   "p[style-name='Quote'] => blockquote:fresh",
   "p[style-name='引用'] => blockquote:fresh"
 ];
+const WORD_PAGE_BREAK_MARKER='__FORMAT_CONVERTER_PAGE_BREAK__';
 const DOC_EXPORT_CSS=`@page{size:A4;margin:18mm 16mm}*{box-sizing:border-box}body{font-family:"Plus Jakarta Sans","Microsoft YaHei","PingFang SC","Noto Sans SC",system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.82;color:#1f2933;background:#fff;font-size:15px}h1,h2,h3{font-family:"Plus Jakarta Sans","Microsoft YaHei",system-ui,sans-serif;line-height:1.28;letter-spacing:0;color:#111827;margin:1.35em 0 .65em}h1{font-size:30px;border-bottom:2px solid #e5e7eb;padding-bottom:10px}h2{font-size:23px;border-bottom:1px solid #edf0f3;padding-bottom:6px}h3{font-size:18px}p{margin:.62em 0;orphans:2;widows:2}ul,ol{padding-left:1.6em;margin:.65em 0}li{margin:.25em 0}table{border-collapse:collapse;width:100%;margin:18px 0;page-break-inside:auto}tr{page-break-inside:avoid;page-break-after:auto}th,td{border:1px solid #d8dee6;padding:8px 10px;text-align:left;vertical-align:top}th{background:#f5f7fa;font-weight:700}code,kbd{font-family:"JetBrains Mono","Consolas",monospace;background:#f4f6f8;padding:2px 5px;border-radius:4px;font-size:.92em}pre{background:#f6f8fa;padding:14px;border-radius:8px;overflow-x:auto;border:1px solid #e5e7eb;white-space:pre-wrap}pre code{background:0 0;padding:0}blockquote{border-left:4px solid #a78bfa;margin:14px 0;padding:8px 16px;background:#faf7ff;color:#4b5563}img{max-width:100%;height:auto;display:block;margin:12px auto}a{color:#2563eb;text-decoration:none}.doc-page{background:#fff}`;
 const WORD_CSS=DOC_EXPORT_CSS;
+const DOC_EXPORT_STABILITY_CSS=`.doc-page{min-height:0}img,figure,table,blockquote,pre{break-inside:avoid;page-break-inside:avoid}thead{display:table-header-group}tfoot{display:table-footer-group}tr{break-inside:avoid;page-break-inside:avoid}h1,h2,h3{break-after:avoid;page-break-after:avoid}.doc-page>*:first-child{margin-top:0}.doc-page-break{height:0;break-before:page;page-break-before:always;visibility:hidden}`;
 
 function wordOptions(){
   return {
     styleMap:WORD_STYLE_MAP,
     includeDefaultStyleMap:true,
+    transformDocument:markWordPageBreaks,
     convertImage:mammoth.images.inline(async element=>{
       const b64=await element.read('base64');
       return {src:`data:${element.contentType};base64,${b64}`};
@@ -1017,39 +1322,65 @@ function wordOptions(){
   };
 }
 
+function markWordPageBreaks(document){
+  const children=[];
+  for(const block of document.children||[]){
+    if(block.type!=='paragraph'){children.push(block);continue}
+    const hasPageBreak=(block.children||[]).some(run=>(run.children||[]).some(child=>child.type==='break'&&child.breakType==='page'));
+    if(!hasPageBreak){children.push(block);continue}
+    let beforeRuns=[],afterRuns=[],seen=false;
+    for(const run of block.children||[]){
+      let before=[],after=[];
+      for(const child of run.children||[]){
+        if(child.type==='break'&&child.breakType==='page'){if(before.length)beforeRuns.push(Object.assign({},run,{children:before}));before=[];seen=true;continue}
+        (seen?after:before).push(child);
+      }
+      if(before.length)beforeRuns.push(Object.assign({},run,{children:before}));
+      if(after.length)afterRuns.push(Object.assign({},run,{children:after}));
+    }
+    if(beforeRuns.length)children.push(Object.assign({},block,{children:beforeRuns}));
+    children.push({type:'paragraph',children:[{type:'run',children:[{type:'text',value:WORD_PAGE_BREAK_MARKER}]}],styleId:null,styleName:null,numbering:null,alignment:null,indent:{start:null,end:null,firstLine:null,hanging:null}});
+    if(afterRuns.length)children.push(Object.assign({},block,{children:afterRuns}));
+  }
+  return Object.assign({},document,{children});
+}
+
 async function readWordHtml(f){
   await ensure('mammoth');
   const buf=await f.arrayBuffer();
   try{
-    return await mammoth.convertToHtml({arrayBuffer:buf},wordOptions());
+    const result=await mammoth.convertToHtml({arrayBuffer:buf},wordOptions());
+    result.value=result.value.replace(new RegExp(`<p>${WORD_PAGE_BREAK_MARKER}<\\/p>`,'g'),'<div class="doc-page-break" aria-hidden="true"></div>');
+    return result;
   }catch(e){
     throw new Error((ext(f.name)==='doc'?'旧版 .doc 格式建议先用 Word/WPS 另存为 .docx 后再转换。':'Word 文档解析失败。')+e.message);
   }
 }
 
 function wordHtmlDocument(name,body){
-  return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${name}</title><style>${WORD_CSS}</style></head><body><main class="doc-page">${body}</main></body></html>`;
+  return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlEscape(name)}</title><style>${WORD_CSS}</style></head><body><main class="doc-page">${body}</main></body></html>`;
 }
 
 async function docHtmlToPdf(html,title='output'){
-  await ensure('html2pdf');
-  const parsed=new DOMParser().parseFromString(html,'text/html');
-  const bodyHtml=parsed.body&&parsed.body.children.length?parsed.body.innerHTML:html;
+  await Promise.all([ensure('html2pdf'),ensure('DOMPurify')]);
+  const bodyHtml=sanitizeDocumentHtml(html);
   const div=document.createElement('div');
   div.className='doc-page';
   div.innerHTML=bodyHtml;
-  div.style.cssText='background:#fff;color:#1f2933;font-family:"Plus Jakarta Sans","Microsoft YaHei","PingFang SC",system-ui,sans-serif;line-height:1.82;font-size:15px;width:794px;min-height:1123px;padding:54px 60px;word-break:break-word';
+  div.style.cssText='background:#fff;color:#1f2933;font-family:"Plus Jakarta Sans","Microsoft YaHei","PingFang SC",system-ui,sans-serif;line-height:1.82;font-size:15px;width:794px;min-height:0;padding:54px 60px;margin:0 auto;word-break:break-word';
   const style=document.createElement('style');
-  style.textContent=DOC_EXPORT_CSS+'.doc-page{margin:0 auto}';
+  style.textContent=DOC_EXPORT_CSS+DOC_EXPORT_STABILITY_CSS+'.doc-page{margin:0 auto}';
   document.head.appendChild(style);
   document.body.appendChild(div);
   div.querySelectorAll('img').forEach(img=>{img.style.maxWidth='100%';img.style.height='auto';img.style.display='block'});
   div.querySelectorAll('table').forEach(t=>{t.style.width='100%';t.style.borderCollapse='collapse'});
+  if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+  await Promise.all(Array.from(div.querySelectorAll('img')).map(img=>img.complete?(img.decode?img.decode().catch(()=>{}):Promise.resolve()):new Promise(resolve=>{img.onload=img.onerror=resolve})));
   try{
     return await html2pdf().set({
       margin:[0,0,0,0],
       filename:(title||'output').replace(/\.[^.]+$/,'')+'.pdf',
-      pagebreak:{mode:['css','legacy'],avoid:['tr','img','blockquote','pre']},
+      pagebreak:{mode:['css','legacy'],avoid:['table','tr','img','figure','blockquote','pre']},
       html2canvas:{scale:2,useCORS:true,letterRendering:true,logging:false,backgroundColor:'#ffffff'},
       jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}
     }).from(div).outputPdf('blob');
@@ -1058,7 +1389,8 @@ async function docHtmlToPdf(html,title='output'){
 
 async function word2html(f){
   const r=await readWordHtml(f);
-  return new Blob([wordHtmlDocument(f.name,r.value)],{type:'text/html;charset=utf-8'});
+  await ensure('DOMPurify');
+  return new Blob([wordHtmlDocument(f.name,sanitizeDocumentHtml(r.value))],{type:'text/html;charset=utf-8'});
 }
 
 async function word2txt(f){
@@ -1079,52 +1411,113 @@ async function word2pdf(f){
 // ====== PPT Engine (canvas-based slide render) ======
 const PT='http://schemas.openxmlformats.org/presentationml/2006/main';
 const AD='http://schemas.openxmlformats.org/drawingml/2006/main';
+const REL='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+function normalizePptPath(path){
+  const parts=[];
+  String(path||'').replace(/\\/g,'/').split('/').forEach(part=>{
+    if(!part||part==='.')return;
+    if(part==='..')parts.pop();else parts.push(part);
+  });
+  return parts.join('/');
+}
+async function pptSlidePaths(zip,presentationXml){
+  const fallback=Object.keys(zip.files)
+    .filter(name=>/^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a,b)=>Number(a.match(/slide(\d+)\.xml$/)[1])-Number(b.match(/slide(\d+)\.xml$/)[1]));
+  const relFile=zip.files['ppt/_rels/presentation.xml.rels'];
+  if(!relFile)return fallback;
+  const relXml=await relFile.async('string');
+  const rels={};
+  for(const match of relXml.matchAll(/<Relationship\b([^>]*)>/g)){
+    const attrs=match[1];
+    const id=(attrs.match(/\bId="([^"]+)"/)||[])[1];
+    const target=(attrs.match(/\bTarget="([^"]+)"/)||[])[1];
+    if(id&&target&&/slide/i.test(attrs))rels[id]=normalizePptPath(target.startsWith('/')?target.slice(1):`ppt/${target}`);
+  }
+  try{
+    const doc=new DOMParser().parseFromString(presentationXml,'application/xml');
+    const ids=Array.from(doc.getElementsByTagNameNS(PT,'sldId'));
+    const ordered=ids.map(node=>{
+      const rid=node.getAttribute('r:id')||node.getAttributeNS(REL,'id');
+      return rels[rid];
+    }).filter(path=>path&&zip.files[path]);
+    if(ordered.length)return ordered;
+  }catch(e){console.warn('PPT slide order fallback:',e)}
+  return fallback;
+}
 async function pptParse(f){
   await ensure('JSZip');
   const buf=await f.arrayBuffer();
   const zip=await JSZip.loadAsync(buf);
   // 读取幻灯片尺寸 (EMU)
   let sw=12192000,sh=6858000;
+  let presentationXml='';
   if(zip.files['ppt/presentation.xml']){
-    const px=await zip.files['ppt/presentation.xml'].async('string');
-    const m=px.match(/<p:sldSz[^>]*cx="(\d+)"[^>]*cy="(\d+)"/);
+    presentationXml=await zip.files['ppt/presentation.xml'].async('string');
+    const m=presentationXml.match(/<p:sldSz[^>]*cx="(\d+)"[^>]*cy="(\d+)"/);
     if(m){sw=+m[1];sh=+m[2]}
   }
-  const sf=Object.keys(zip.files).filter(x=>/^ppt\/slides\/slide\d+\.xml$/.test(x)).sort();
+  const sf=await pptSlidePaths(zip,presentationXml);
   if(!sf.length)throw new Error('PPT 中没有找到幻灯片');
   const slides=[];
+  const warnings=[];
+  const imgBlobCache=new Map();      // zip 路径 -> Blob（跨页去重）
+  const pendingImgs=new Set();       // 本 deck 需要的全部图片路径
   for(const fn of sf){
     const num=fn.match(/(\d+)/)[1];
     const sx=await zip.files[fn].async('string');
-    // 解析关系文件获取图片映射
+    // 关系文件：图片 Id -> zip 路径（属性顺序无关，路径归一化）
     const rp=`ppt/slides/_rels/slide${num}.xml.rels`;
     const imgMap={};
     if(zip.files[rp]){
       const rx=await zip.files[rp].async('string');
-      for(const m of rx.matchAll(/<Relationship[^>]*Id="([^"]*)"[^>]*Target="([^"]*)"[^>]*Type="[^"]*image[^"]*"/g)){
-        imgMap[m[1]]='ppt/'+(m[2].startsWith('../')?m[2].slice(3):m[2]);
+      for(const m of rx.matchAll(/<Relationship\b([^>]*)>/g)){
+        const id=(m[1].match(/Id="([^"]*)"/)||[])[1];
+        const tgt=(m[1].match(/Target="([^"]*)"/)||[])[1];
+        const type=(m[1].match(/Type="([^"]*)"/)||[])[1];
+        if(id&&tgt&&type&&/image/.test(type)){
+          let p=tgt;
+          if(p.startsWith('/'))p=p.slice(1);                 // /ppt/media -> ppt/media
+          else if(p.startsWith('../'))p='ppt/'+p.slice(3);   // ../media -> ppt/media
+          else p='ppt/slides/'+p;                            // 相对 slides 目录
+          imgMap[id]=p;
+        }
       }
     }
-    // 解析形状
+    // 解析形状：文字框 p:sp、图片 p:pic、图表/表格 p:graphicFrame
+    // 按文档顺序收集，保证图层叠放正确（背景图在下、文字在上）
     const shapes=[];
-    const spRe=/<p:sp[^>]*>([\s\S]*?)<\/p:sp>/g;
-    let spm;
-    while((spm=spRe.exec(sx))){
-      const xml=spm[1];
-      const xf=xml.match(/<a:xfrm>[\s\S]*?<a:off\s+x="(\d+)"\s+y="(\d+)"[\s\S]*?<a:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
-      if(!xf)continue;
-      const shape={x:+xf[1],y:+xf[2],w:+xf[3],h:+xf[4],text:'',img:null};
-      // 文字
-      shape.text=[...xml.matchAll(/<a:t[^>]*>([^<]*)<\/a:t>/g)].map(m=>m[1]).join('').trim();
-      // 图片
-      const emb=xml.match(/r:embed="([^"]+)"/);
-      if(emb&&imgMap[emb[1]]&&zip.files[imgMap[emb[1]]]){
-        try{shape.img=await zip.files[imgMap[emb[1]]].async('uint8array')}catch(e){}
+    const xfRe=s=>{const m=s.match(/<a:xfrm[^>]*>[\s\S]*?<a:off\s+x="(\d+)"\s+y="(\d+)"[\s\S]*?<a:ext\s+cx="(\d+)"\s+cy="(\d+)"/);return m?[+m[1],+m[2],+m[3],+m[4]]:null};
+    const pushShape=(xf,extra)=>{if(xf)shapes.push(Object.assign({x:xf[0],y:xf[1],w:xf[2],h:xf[3],text:'',img:null,imgPath:null},extra))};
+    const collect=(re,type)=>{const out=[];let m;while((m=re.exec(sx)))out.push({idx:m.index,type,xml:m[1]});return out};
+    const all=[...collect(/<p:sp(?:\s[^>]*)?>([\s\S]*?)<\/p:sp>/g,'sp'),
+               ...collect(/<p:pic[^>]*>([\s\S]*?)<\/p:pic>/g,'pic'),
+               ...collect(/<p:graphicFrame[^>]*>([\s\S]*?)<\/p:graphicFrame>/g,'gf')].sort((a,b)=>a.idx-b.idx);
+    for(const it of all){
+      const xf=xfRe(it.xml);
+      if(it.type==='sp'){
+        const text=[...it.xml.matchAll(/<a:t[^>]*>([^<]*)<\/a:t>/g)].map(m=>m[1]).join('').trim();
+        const emb=it.xml.match(/r:embed="([^"]+)"/);
+        const ip=emb&&imgMap[emb[1]];
+        if(ip)pendingImgs.add(ip);
+        if(text||ip)pushShape(xf,{text,imgPath:ip||null});
+      }else if(it.type==='pic'){
+        const emb=it.xml.match(/r:embed="([^"]+)"/);
+        const ip=emb&&imgMap[emb[1]];
+        if(ip){pendingImgs.add(ip);pushShape(xf,{imgPath:ip})}
+      }else if(xf){
+        const kind=/<a:tbl\b/.test(it.xml)?'table':'chart';
+        pushShape(xf,{kind});
+        warnings.push(kind==='table'?'兼容解析器检测到表格，已使用可见降级渲染。':'兼容解析器检测到图表，已使用可见降级渲染。');
       }
-      if(shape.text||shape.img)shapes.push(shape);
     }
     slides.push({w:sw,h:sh,shapes});
   }
+  // 一次性并行读取全部图片：跨页去重 + blob 直出（省去 Uint8Array 拷贝）
+  const need=[...pendingImgs].filter(p=>zip.files[p]);
+  await Promise.all(need.map(async p=>{try{imgBlobCache.set(p,await zip.files[p].async('blob'))}catch(e){}}));
+  for(const s of slides)for(const sh of s.shapes)if(sh.imgPath&&imgBlobCache.has(sh.imgPath))sh.img=imgBlobCache.get(sh.imgPath);
+  slides._warnings=Array.from(new Set(warnings));
   return slides;
 }
 async function pptRenderSlide(slide){
@@ -1136,24 +1529,170 @@ async function pptRenderSlide(slide){
   for(const sh of slide.shapes){
     const sx=sh.x/9525*sf,sy=sh.y/9525*sf,sw=sh.w/9525*sf,shh=sh.h/9525*sf;
     if(sh.img)try{
-      const img=await loadImg(new Blob([sh.img]));
+      const img=await loadImg(sh.img);
       ctx.drawImage(img,sx,sy,sw,shh);
     }catch(e){console.warn('PPT image:',e)}
+    if(sh.kind==='table'||sh.kind==='chart'){
+      ctx.fillStyle=sh.kind==='table'?'rgba(241,245,249,.96)':'rgba(255,247,237,.96)';
+      ctx.fillRect(sx,sy,sw,shh);
+      ctx.strokeStyle=sh.kind==='table'?'#94a3b8':'#f59e0b';
+      ctx.lineWidth=Math.max(1,sf);
+      ctx.strokeRect(sx,sy,sw,shh);
+      ctx.fillStyle='#475569';
+      ctx.font=`${Math.max(10,Math.min(18,sw/18))}px sans-serif`;
+      ctx.fillText(sh.kind==='table'?'Table (fallback)':'Chart (fallback)',sx+8,sy+20);
+    }
     if(sh.text){
-      const fs=Math.max(Math.min(Math.round(shh*0.55),56),9);
-      ctx.fillStyle='#1a1a1a';ctx.font=`${fs}px "Microsoft YaHei",sans-serif`;
-      const mw=sw-12;let line='',ly=sy+fs;
-      for(const ch of sh.text){
-        const test=line+ch;
-        if(ctx.measureText(test).width>mw&&line.length){ctx.fillText(line,sx+6,ly);line=ch;ly+=fs+4}
-        else line=test;
+      // 自动收缩字号，把文本完整放进文本框（按宽分行 + 按高裁剪），避免溢出与下方文本框重叠
+      const PAD=4,LH=1.25;
+      const maxW=Math.max(8,sw-PAD*2), maxH=Math.max(8,shh-PAD*2);
+      const fitText=(size)=>{
+        ctx.font=`${size}px "Microsoft YaHei",sans-serif`;
+        const lh=size*LH;
+        const lines=[]; let cur='';
+        for(const ch of sh.text){
+          const t=cur+ch;
+          if(ctx.measureText(t).width>maxW&&cur){lines.push(cur);cur=ch}
+          else cur=t;
+        }
+        if(cur)lines.push(cur);
+        return {lines,lh,h:lines.length*lh};
+      };
+      let fs=Math.max(Math.min(Math.round(shh*0.5),56),9);
+      let fit=fitText(fs);
+      while(fs>9&&fit.h>maxH){fs--;fit=fitText(fs)}
+      ctx.fillStyle='#1a1a1a';
+      ctx.font=`${fs}px "Microsoft YaHei",sans-serif`;
+      let ly=sy+PAD+fit.lh*0.9;
+      // 白底描边：让文字在彩色图片背景上也清晰可读，避免视觉上"埋进背景"
+      ctx.strokeStyle='rgba(255,255,255,0.92)';
+      ctx.lineWidth=Math.max(2,fs*0.18);
+      ctx.lineJoin='round';
+      for(const line of fit.lines){
+        if(ly>sy+shh-PAD)break;
+        ctx.strokeText(line,sx+PAD,ly);
+        ctx.fillText(line,sx+PAD,ly);
+        ly+=fit.lh;
       }
-      if(line)ctx.fillText(line,sx+6,ly);
     }
   }
   return c;
 }
+function addUniqueWarning(list,message){
+  if(message&&!list.includes(message))list.push(message);
+}
+
+async function inspectPptWarnings(buf){
+  const warnings=[];
+  try{
+    await ensure('JSZip');
+    const zip=await JSZip.loadAsync(buf);
+    const names=Object.keys(zip.files);
+    if(names.some(name=>/\.(?:emf|wmf)$/i.test(name)))addUniqueWarning(warnings,'检测到 EMF/WMF 矢量图：部分复杂效果可能降级显示。');
+    for(const name of names.filter(name=>/\.xml$/i.test(name))){
+      const xml=await zip.files[name].async('string');
+      if(/<p:(?:timing|anim|transition)\b|<a:(?:scene3d|sp3d|camera|lightRig)\b/i.test(xml))addUniqueWarning(warnings,'检测到动画或 3D 效果：导出 PDF 将使用静态降级显示。');
+      if(/<p:oleObj\b|<o:OLEObject\b/i.test(xml))addUniqueWarning(warnings,'检测到 OLE/嵌入对象：该对象不会执行，仅显示可见降级提示。');
+    }
+  }catch(e){addUniqueWarning(warnings,'PPT 兼容性扫描失败，已继续尝试渲染。')}
+  return warnings;
+}
+
+async function renderPptWithLibrary(f,warnings,onSlide){
+  if(typeof onSlide!=='function')throw new TypeError('PPT 渲染需要逐页写入回调');
+  await ensure('PptxRenderer');
+  await ensure('html2pdf');
+  const lib=window.PptxRenderer;
+  const buf=await f.arrayBuffer();
+  for(const warning of await inspectPptWarnings(buf))addUniqueWarning(warnings,warning);
+  const files=await lib.parseZip(buf,lib.RECOMMENDED_ZIP_LIMITS);
+  const presentation=lib.buildPresentation(files,{lazySlides:false});
+  if(!presentation||!presentation.slides||!presentation.slides.length)throw new Error('PPT 中没有可渲染的幻灯片');
+  const mount=document.createElement('div');
+  mount.style.cssText=`position:absolute;left:-100000px;top:0;width:${presentation.width}px;height:${presentation.height}px;overflow:hidden;pointer-events:none;opacity:1`;
+  document.body.appendChild(mount);
+  const mediaUrlCache=new Map();
+  let count=0;
+  try{
+    for(let i=0;i<presentation.slides.length;i++){
+      const slide=presentation.slides[i];
+      $('progD').textContent=`正在渲染第 ${i+1}/${presentation.slides.length} 页...`;
+      if(slide.hidden)addUniqueWarning(warnings,`第 ${i+1} 页在 PPTX 中标记为隐藏，仍按原始顺序导出。`);
+      let handle=null;
+      let element=null;
+      let canvas=null;
+      try{
+        handle=lib.renderSlide(presentation,slide,{
+          mediaUrlCache,
+          pdfjs:false,
+          onNodeError:(nodeId,error)=>addUniqueWarning(warnings,`第 ${i+1} 页的元素 ${nodeId||''} 渲染失败，已显示降级占位。`)
+        });
+        element=handle&& (handle.element||handle.el);
+        if(!element)throw new Error('渲染器没有返回幻灯片元素');
+        mount.appendChild(element);
+        if(handle.ready)await handle.ready;
+        if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+        const images=Array.from(element.querySelectorAll('img'));
+        await Promise.all(images.map(img=>img.complete?(img.decode?img.decode().catch(()=>{}):Promise.resolve()):new Promise(resolve=>{img.onload=img.onerror=resolve})));
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        canvas=await html2pdf().set({
+          html2canvas:{scale:2,width:presentation.width,height:presentation.height,windowWidth:presentation.width,windowHeight:presentation.height,backgroundColor:'#fff',useCORS:true,logging:false}
+        }).from(element).toCanvas().get('canvas');
+        await onSlide({canvas,width:presentation.width,height:presentation.height,index:i,total:presentation.slides.length});
+        count++;
+      }finally{
+        if(canvas){canvas.width=0;canvas.height=0}
+        if(element)element.remove();
+        if(handle)try{handle.dispose()}catch(e){}
+      }
+    }
+  }finally{
+    mount.remove();
+    for(const url of mediaUrlCache.values())if(typeof url==='string'&&url.startsWith('blob:'))URL.revokeObjectURL(url);
+    mediaUrlCache.clear();
+  }
+  return {count,width:presentation.width,height:presentation.height};
+}
+
+async function ppt2pdfResult(f){
+  const warnings=[];
+  await ensure('jspdf');
+  const{jsPDF}=window.jspdf;
+  let doc=null;
+  let pageCount=0;
+  const appendSlide=async slide=>{
+    const pageW=slide.width*.75,pageH=slide.height*.75;
+    const orientation=pageW>=pageH?'landscape':'portrait';
+    if(!doc)doc=new jsPDF({unit:'pt',format:[pageW,pageH],orientation});
+    else doc.addPage([pageW,pageH],orientation);
+    const data=slide.canvas.toDataURL('image/jpeg',.96);
+    doc.addImage(data,'JPEG',0,0,pageW,pageH,undefined,'FAST');
+    pageCount++;
+  };
+  try{
+    await renderPptWithLibrary(f,warnings,appendSlide);
+  }catch(error){
+    doc=null;pageCount=0;
+    addUniqueWarning(warnings,'本地 PPT 渲染包无法处理该文件，已切换到兼容解析器。');
+    const parsed=await pptParse(f);
+    for(const warning of (parsed._warnings||[]))addUniqueWarning(warnings,warning);
+    for(let i=0;i<parsed.length;i++){
+      const canvas=await pptRenderSlide(parsed[i]);
+      try{await appendSlide({canvas,width:parsed[i].w/9525,height:parsed[i].h/9525,index:i,total:parsed.length})}
+      finally{canvas.width=0;canvas.height=0}
+    }
+  }
+  if(!pageCount||!doc)throw new Error('无法读取 PPT 内容');
+  return {blob:doc.output('blob'),warnings};
+}
+
 async function ppt2pdf(f){
+  const result=await ppt2pdfResult(f);
+  setConversionWarnings(result.warnings);
+  return result.blob;
+}
+
+async function ppt2pdfLegacy(f){
   $('progD').textContent='正在解析 PPT...';
   await ensure('jspdf');
   const slides=await pptParse(f);
@@ -1166,7 +1705,9 @@ async function ppt2pdf(f){
     const pw=ratio>1.35?297:210,ph=ratio>1.35?210:297;
     if(!doc){doc=new jsPDF({unit:'mm',format:[pw,ph],orientation:ratio>1.35?'landscape':'portrait'})}
     else doc.addPage([pw,ph],ratio>1.35?'landscape':'portrait');
-    doc.addImage(c.toDataURL('image/jpeg',0.92),'JPEG',0,0,pw,ph);
+    // 按真实宽高比铺图（白底两侧留白不可见），避免拉伸变形
+    const iw=ratio>=pw/ph?pw:ph*ratio, ih=ratio>=pw/ph?pw/ratio:ph;
+    doc.addImage(c.toDataURL('image/jpeg',0.92),'JPEG',(pw-iw)/2,(ph-ih)/2,iw,ih);
   }
   return doc.output('blob');
 }
@@ -1180,11 +1721,11 @@ async function ppt2png(f){
 // ====== Other conversions ======
 const rd=readFileText;const rAB=f=>f.arrayBuffer();
 
-async function md2html(f){await ensure('marked');const md=await rd(f);return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${f.name}</title><style>body{font-family:'Plus Jakarta Sans','Microsoft YaHei',system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.9;color:#1a1a1a}h1,h2,h3{font-family:'Playfair Display',Georgia,serif;letter-spacing:-.02em;border-bottom:1px solid #eaeaea;padding-bottom:6px}code{background:#f4f4f2;padding:2px 6px;border-radius:4px;font-size:.9em}pre{background:#f8f8f7;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #eaeaea}pre code{background:0 0;padding:0}table{border-collapse:collapse;width:100%}th,td{border:1px solid #eaeaea;padding:10px 14px}th{background:#f8f8f7}blockquote{border-left:3px solid #d4d4d4;margin:0;padding:10px 20px;color:#6b6b6b}a{color:#6366f1}img{max-width:100%}</style></head><body>${marked.parse(md)}</body></html>`],{type:'text/html;charset=utf-8'})}
+async function md2html(f){await Promise.all([ensure('marked'),ensure('DOMPurify')]);const md=await rd(f);const body=sanitizeDocumentHtml(marked.parse(md));return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${htmlEscape(f.name)}</title><style>body{font-family:'Plus Jakarta Sans','Microsoft YaHei',system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.9;color:#1a1a1a}h1,h2,h3{font-family:'Playfair Display',Georgia,serif;letter-spacing:-.02em;border-bottom:1px solid #eaeaea;padding-bottom:6px}code{background:#f4f4f2;padding:2px 6px;border-radius:4px;font-size:.9em}pre{background:#f8f8f7;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #eaeaea}pre code{background:0 0;padding:0}table{border-collapse:collapse;width:100%}th,td{border:1px solid #eaeaea;padding:10px 14px}th{background:#f8f8f7}blockquote{border-left:3px solid #d4d4d4;margin:0;padding:10px 20px;color:#6b6b6b}a{color:#6366f1}img{max-width:100%}</style></head><body>${body}</body></html>`],{type:'text/html;charset=utf-8'})}
 async function md2pdf(f){await ensure('marked');const md=await rd(f);return docHtmlToPdf(marked.parse(md),f.name)}
 async function html2pdf_(f){const h=await rd(f);return docHtmlToPdf(h,f.name)}
-async function html2txt(f){const h=await rd(f);const d=document.createElement('div');d.innerHTML=h;return new Blob([d.textContent||''],{type:'text/plain;charset=utf-8'})}
-async function html2md(f){const h=await rd(f);const d=document.createElement('div');d.innerHTML=h;
+async function html2txt(f){const h=await rd(f);const d=document.createElement('div');await setSanitizedHtml(d,h);return new Blob([d.textContent||''],{type:'text/plain;charset=utf-8'})}
+async function html2md(f){const h=await rd(f);const d=document.createElement('div');await setSanitizedHtml(d,h);
   let m='',p='';
   const w=function(n,ctx={}){
     if(n.nodeType===3){p+=n.textContent;return}
@@ -1301,22 +1842,22 @@ async function dom2docx(root){
   return await Packer.toBlob(d);
 }
 
-async function html2docx(f){const h=await rd(f);const d=document.createElement('div');d.innerHTML=h;return dom2docx(d)}
-async function md2docx(f){await ensure('marked');const md=await rd(f);const d=document.createElement('div');d.innerHTML=marked.parse(md);return dom2docx(d)}
+async function html2docx(f){const h=await rd(f);const d=document.createElement('div');await setSanitizedHtml(d,h);return dom2docx(d)}
+async function md2docx(f){await ensure('marked');const md=await rd(f);const d=document.createElement('div');await setSanitizedHtml(d,marked.parse(md));return dom2docx(d)}
 async function txt2pdf(f){await ensure('jspdf');const t=await rd(f);const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});const ls=doc.splitTextToSize(t,180);doc.setFontSize(11);let y=20;ls.forEach(l=>{if(y>277){doc.addPage();y=20}doc.text(l,15,y);y+=6});return doc.output('blob')}
 async function txt2docx(f){await ensureDocx();const t=await rd(f);const{Document,Packer,Paragraph,TextRun}=docx;return Packer.toBlob(new Document({sections:[{children:t.split('\n').map(l=>new Paragraph({children:[new TextRun({text:l,size:22})]}))}]}))}
 async function img2img(f,tf){const img=await loadImg(f);const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;const ctx=c.getContext('2d');if(['jpg','jpeg','bmp'].includes(tf)){ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height)}ctx.drawImage(img,0,0);if(tf==='bmp'){const dataUrl=c.toDataURL('image/png');const res=await fetch(dataUrl);return res.blob()}const m={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',ico:'image/x-icon'};return new Promise(r=>c.toBlob(r,m[tf]||'image/png',tf==='webp'?.92:.95))}
 async function svg2img(f,tf){const s=await rd(f);const b=new Blob([s],{type:'image/svg+xml'});const img=await loadImg(b);const scale=Math.max(1,Math.ceil(1200/Math.max(img.naturalWidth||1,img.naturalHeight||1)));const c=document.createElement('canvas');c.width=(img.naturalWidth||800)*scale;c.height=(img.naturalHeight||600)*scale;const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(img,0,0,c.width,c.height);if(tf==='pdf')return c2pdf(c);return new Promise(r=>c.toBlob(r,{png:'image/png',jpg:'image/jpeg'}[tf]||'image/png',.95))}
 async function svg2pdf(f){return svg2img(f,'pdf')}
-function loadImg(b){return new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=URL.createObjectURL(b)})}
+function loadImg(b){return new Promise((ok,no)=>{const i=new Image();const url=URL.createObjectURL(b);const done=()=>URL.revokeObjectURL(url);i.onload=()=>{done();ok(i)};i.onerror=e=>{done();no(e)};i.src=url})}
 async function img2pdf(f){await ensure('jspdf');const img=await loadImg(f);const{jsPDF}=window.jspdf;const w=img.naturalWidth,h=img.naturalHeight;const doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h);return doc.output('blob')}
 async function c2pdf(c){await ensure('jspdf');const{jsPDF}=window.jspdf;const w=c.width,h=c.height;const doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h);return doc.output('blob')}
 async function xls2csv(f){await ensure('XLSX');const d=await rAB(f);const wb=XLSX.read(d,{type:'array'});return new Blob(['﻿'+XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]])],{type:'text/csv;charset=utf-8'})}
 async function xls2xls(f,fmt){await ensure('XLSX');const d=await rAB(f);const wb=XLSX.read(d,{type:'array'});return new Blob([XLSX.write(wb,{bookType:fmt,type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
-async function xls2html(f){await ensure('XLSX');const d=await rAB(f);const wb=XLSX.read(d,{type:'array'});let h='<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #eaeaea;padding:8px 12px}th{background:#f8f8f7;font-weight:600}</style></head><body>';wb.SheetNames.forEach(n=>{h+=`<h3 style="margin:20px 0 10px">${n}</h3>${XLSX.utils.sheet_to_html(wb.Sheets[n])}`});h+='</body></html>';return new Blob([h],{type:'text/html;charset=utf-8'})}
+async function xls2html(f){await Promise.all([ensure('XLSX'),ensure('DOMPurify')]);const d=await rAB(f);const wb=XLSX.read(d,{type:'array'});let h='<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #eaeaea;padding:8px 12px}th{background:#f8f8f7;font-weight:600}</style></head><body>';wb.SheetNames.forEach(n=>{h+=`<h3 style="margin:20px 0 10px">${htmlEscape(n)}</h3>${sanitizeDocumentHtml(XLSX.utils.sheet_to_html(wb.Sheets[n]))}`});h+='</body></html>';return new Blob([h],{type:'text/html;charset=utf-8'})}
 async function csv2xls(f){await ensure('XLSX');const t=await rd(f);const wb=XLSX.read(t,{type:'string'});return new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
 async function csv2txt(f){return new Blob([await rd(f)],{type:'text/plain;charset=utf-8'})}
-async function csv2html(f){await ensure('XLSX');const t=await rd(f);const wb=XLSX.read(t,{type:'string'});return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #eaeaea;padding:8px 12px}th{background:#f8f8f7}</style></head><body>${XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]])}</body></html>`],{type:'text/html;charset=utf-8'})}
+async function csv2html(f){await Promise.all([ensure('XLSX'),ensure('DOMPurify')]);const t=await rd(f);const wb=XLSX.read(t,{type:'string'});const body=sanitizeDocumentHtml(XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]]));return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse}th,td{border:1px solid #eaeaea;padding:8px 12px}th{background:#f8f8f7}</style></head><body>${body}</body></html>`],{type:'text/html;charset=utf-8'})}
 
 // ====== Video Engine (FFmpeg.wasm) ======
 let ffmpegInstance=null;
@@ -1325,13 +1866,13 @@ async function getFFmpeg(){
   if(typeof FFmpeg==='undefined'){
     await new Promise((ok,no)=>{
       const s=document.createElement('script');
-      s.src='https://unpkg.com/@ffmpeg/ffmpeg@0.11.5/dist/ffmpeg.min.js';
+      s.src='lib/ffmpeg/ffmpeg.min.js';
       s.onload=ok;s.onerror=()=>no(new Error('FFmpeg 脚本加载失败'));
       document.body.appendChild(s);
     });
   }
 
-  const CORE_BASE='https://unpkg.com/@ffmpeg/core@0.11.0/dist';
+  const CORE_BASE='lib/ffmpeg';
   const CORE_JS=`${CORE_BASE}/ffmpeg-core.js`;
   const CORE_WASM=`${CORE_BASE}/ffmpeg-core.wasm`;
 
@@ -1362,33 +1903,39 @@ async function getFFmpeg(){
   }
   if(!wasmBlob)throw new Error('视频引擎下载失败,请检查网络后刷新重试');
   const wasmUrl=URL.createObjectURL(wasmBlob);
+  let jsUrl=null;
+  try{
+    // Step 2: Download core JS and patch WASM path
+    const jsR=await fetch(CORE_JS);
+    if(!jsR.ok)throw new Error('HTTP '+jsR.status);
+    let jsSrc=await jsR.text();
+    jsSrc=jsSrc.replace(/["']ffmpeg-core\.wasm["']/g,JSON.stringify(wasmUrl));
+    const jsBlob=new Blob([jsSrc],{type:'application/javascript'});
+    jsUrl=URL.createObjectURL(jsBlob);
 
-  // Step 2: Download core JS and patch WASM path
-  const jsR=await fetch(CORE_JS);
-  let jsSrc=await jsR.text();
-  jsSrc=jsSrc.replace(/["']ffmpeg-core\.wasm["']/g,JSON.stringify(wasmUrl));
-  const jsBlob=new Blob([jsSrc],{type:'application/javascript'});
-  const jsUrl=URL.createObjectURL(jsBlob);
+    // Step 3: Load FFmpeg with local core
+    $('bar').style.width='92%';$('progD').textContent='正在初始化引擎...';
+    const{createFFmpeg,fetchFile}=FFmpeg;
+    const ff=createFFmpeg({
+      log:true,
+      corePath:jsUrl,
+      progress:({ratio})=>{
+        const pct=Math.min(Math.round(ratio*100),99);
+        $('bar').style.width=92+Math.round(ratio*7)+'%';
+        $('progD').textContent=`正在转码... ${pct}%`;
+      }
+    });
+    await ff.load();
 
-  // Step 3: Load FFmpeg with local core
-  $('bar').style.width='92%';$('progD').textContent='正在初始化引擎...';
-  const{createFFmpeg,fetchFile}=FFmpeg;
-  const ff=createFFmpeg({
-    log:true,
-    corePath:jsUrl,
-    progress:({ratio})=>{
-      const pct=Math.min(Math.round(ratio*100),99);
-      $('bar').style.width=92+Math.round(ratio*7)+'%';
-      $('progD').textContent=`正在转码... ${pct}%`;
-    }
-  });
-  await ff.load();
-
-  $('bar').style.width='100%';
-  $('progD').textContent='引擎就绪,开始转码...';
-  ffmpegInstance=ff;
-  window._fetchFile=fetchFile;
-  return ff;
+    $('bar').style.width='100%';
+    $('progD').textContent='引擎就绪,开始转码...';
+    ffmpegInstance=ff;
+    window._fetchFile=fetchFile;
+    return ff;
+  }finally{
+    URL.revokeObjectURL(wasmUrl);
+    if(jsUrl)URL.revokeObjectURL(jsUrl);
+  }
 }
 
 async function vid2gif(f){
@@ -1455,39 +2002,37 @@ async function vid2webm(f){
 async function audConvert(f,targetFmt){
   $('progD').textContent='正在加载音频...';
   const url=URL.createObjectURL(f);
-  const audio=new Audio();audio.src=url;
-  await new Promise((ok,no)=>{audio.oncanplay=ok;audio.onerror=()=>no(new Error('音频加载失败'));audio.load()});
+  try{
+    const audio=new Audio();audio.src=url;
+    await new Promise((ok,no)=>{audio.oncanplay=ok;audio.onerror=()=>no(new Error('音频加载失败'));audio.load()});
 
-  const ctx=new AudioContext();
-  const buf=await f.arrayBuffer();
-  const audioBuf=await ctx.decodeAudioData(buf);
+    const ctx=new AudioContext();
+    try{
+      const buf=await f.arrayBuffer();
+      const audioBuf=await ctx.decodeAudioData(buf);
 
-  $('progD').textContent='正在编码...';
-  // 用 OfflineAudioContext 渲染
-  const off=new OfflineAudioContext(audioBuf.numberOfChannels,audioBuf.length,audioBuf.sampleRate);
-  const src=off.createBufferSource();src.buffer=audioBuf;src.connect(off.destination);src.start();
-  const rendered=await off.startRendering();
+      $('progD').textContent='正在编码...';
+      // 用 OfflineAudioContext 渲染
+      const off=new OfflineAudioContext(audioBuf.numberOfChannels,audioBuf.length,audioBuf.sampleRate);
+      const src=off.createBufferSource();src.buffer=audioBuf;src.connect(off.destination);src.start();
+      const rendered=await off.startRendering();
 
-  // 导出为 WAV
-  if(targetFmt==='wav'){
-    const wav=audioBufToWav(rendered);
-    URL.revokeObjectURL(url);
-    return new Blob([wav],{type:'audio/wav'});
-  }
+      // 导出为 WAV
+      if(targetFmt==='wav')return new Blob([audioBufToWav(rendered)],{type:'audio/wav'});
 
-  // 其他格式用 MediaRecorder
-  const dest=ctx.createMediaStreamDestination();
-  const src2=ctx.createBufferSource();src2.buffer=rendered;src2.connect(dest);src2.start();
-  const chunks=[];
-  const mime=targetFmt==='mp3'?'audio/mpeg':'audio/ogg';
-  const rec=new MediaRecorder(dest.stream,{mimeType:MediaRecorder.isTypeSupported(mime)?mime:'audio/webm'});
-  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
-  const done=new Promise(ok=>rec.onstop=()=>ok(new Blob(chunks,{type:mime})));
-  rec.start();
-  src2.onended=()=>rec.stop();
-  const blob=await done;
-  URL.revokeObjectURL(url);
-  return blob;
+      // 其他格式用 MediaRecorder
+      const dest=ctx.createMediaStreamDestination();
+      const src2=ctx.createBufferSource();src2.buffer=rendered;src2.connect(dest);src2.start();
+      const chunks=[];
+      const mime=targetFmt==='mp3'?'audio/mpeg':'audio/ogg';
+      const rec=new MediaRecorder(dest.stream,{mimeType:MediaRecorder.isTypeSupported(mime)?mime:'audio/webm'});
+      rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+      const done=new Promise(ok=>rec.onstop=()=>ok(new Blob(chunks,{type:mime})));
+      rec.start();
+      src2.onended=()=>rec.stop();
+      return await done;
+    }finally{try{await ctx.close()}catch(e){}}
+  }finally{URL.revokeObjectURL(url)}
 }
 
 function audioBufToWav(buf){
@@ -1514,8 +2059,8 @@ hook($('dropM'),'dragleave',()=>$('dropM').classList.remove('over'));
 hook($('dropM'),'drop',e=>{e.preventDefault();$('dropM').classList.remove('over');addM(e.dataTransfer.files)});
 hook($('fiM'),'change',()=>addM($('fiM').files));
 function addM(fs){Array.from(fs).forEach(f=>{if(ext(f.name)==='pdf')mf.push(f)});rM()}
-function rM(){$('ml').innerHTML=mf.map((f,i)=>`<div class="mi"><span class="mi-i">${i+1}</span><span class="mi-n">${f.name}</span><span class="mi-s">${sz(f.size)}</span><button class="mi-x" onclick="mf.splice(${i},1);rM()">移除</button></div>`).join('');$('goM').style.display=mf.length>=2?'block':'none'}
-hook($('goM'),'click',async()=>{if(mf.length<2)return;$('progM').classList.add('show');$('goM').disabled=true;try{await ensure('PDFLib');const{PDFDocument}=PDFLib;const m=await PDFDocument.create();for(const f of mf){const s=await PDFDocument.load(await f.arrayBuffer());(await m.copyPages(s,s.getPageIndices())).forEach(p=>m.addPage(p))}show(new Blob([await m.save()],{type:'application/pdf'}),'合并结果.pdf',$('resM'))}catch(e){$('resM').innerHTML=`<div class="res-err">${e.message}</div>`;$('resM').classList.add('show')}finally{$('progM').classList.remove('show');$('goM').disabled=false}});
+function rM(){const list=$('ml');list.replaceChildren();mf.forEach((f,i)=>{const row=document.createElement('div');row.className='mi';const index=document.createElement('span');index.className='mi-i';index.textContent=String(i+1);const name=document.createElement('span');name.className='mi-n';name.textContent=f.name;const size=document.createElement('span');size.className='mi-s';size.textContent=sz(f.size);const remove=document.createElement('button');remove.className='mi-x';remove.type='button';remove.textContent='移除';remove.addEventListener('click',()=>{mf.splice(i,1);rM()});row.append(index,name,size,remove);list.appendChild(row)});$('goM').style.display=mf.length>=2?'block':'none'}
+hook($('goM'),'click',async()=>{if(mf.length<2)return;$('progM').classList.add('show');$('goM').disabled=true;try{await ensure('PDFLib');const{PDFDocument}=PDFLib;const m=await PDFDocument.create();for(const f of mf){const s=await PDFDocument.load(await f.arrayBuffer());(await m.copyPages(s,s.getPageIndices())).forEach(p=>m.addPage(p))}show(new Blob([await m.save()],{type:'application/pdf'}),'合并结果.pdf',$('resM'))}catch(e){showError(e.message,$('resM'))}finally{$('progM').classList.remove('show');$('goM').disabled=false}});
 
 // ====== Image Merge ======
 let imf=[];
@@ -1524,8 +2069,8 @@ hook($('dropI'),'dragleave',()=>$('dropI').classList.remove('over'));
 hook($('dropI'),'drop',e=>{e.preventDefault();$('dropI').classList.remove('over');addI(e.dataTransfer.files)});
 hook($('fiI'),'change',()=>addI($('fiI').files));
 function addI(fs){Array.from(fs).forEach(f=>{if(f.type.startsWith('image/'))imf.push(f)});rI()}
-function rI(){$('il').innerHTML=imf.map((f,i)=>{const u=URL.createObjectURL(f);return`<div class="it"><img src="${u}"><button onclick="imf.splice(${i},1);rI()">x</button></div>`}).join('');$('goI').style.display=imf.length?'block':'none'}
-hook($('goI'),'click',async()=>{if(!imf.length)return;$('progI').classList.add('show');$('goI').disabled=true;try{await ensure('jspdf');const{jsPDF}=window.jspdf;let doc=null;for(const f of imf){const img=await loadImg(f);const w=img.naturalWidth,h=img.naturalHeight;if(!doc)doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});else doc.addPage([w,h],w>h?'landscape':'portrait');const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h)}show(doc.output('blob'),'图片合并.pdf',$('resI'))}catch(e){$('resI').innerHTML=`<div class="res-err">${e.message}</div>`;$('resI').classList.add('show')}finally{$('progI').classList.remove('show');$('goI').disabled=false}});
+function rI(){clearImagePreviewUrls();const list=$('il');list.replaceChildren();imf.forEach((f,i)=>{const url=URL.createObjectURL(f);imagePreviewUrls.push(url);const item=document.createElement('div');item.className='it';const image=document.createElement('img');image.src=url;image.alt=f.name;const remove=document.createElement('button');remove.type='button';remove.textContent='x';remove.addEventListener('click',()=>{imf.splice(i,1);rI()});item.append(image,remove);list.appendChild(item)});$('goI').style.display=imf.length?'block':'none'}
+hook($('goI'),'click',async()=>{if(!imf.length)return;$('progI').classList.add('show');$('goI').disabled=true;try{await ensure('jspdf');const{jsPDF}=window.jspdf;let doc=null;for(const f of imf){const img=await loadImg(f);const w=img.naturalWidth,h=img.naturalHeight;if(!doc)doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});else doc.addPage([w,h],w>h?'landscape':'portrait');const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h);c.width=0;c.height=0}show(doc.output('blob'),'图片合并.pdf',$('resI'))}catch(e){showError(e.message,$('resI'))}finally{$('progI').classList.remove('show');$('goI').disabled=false}});
 
 // Strands WebGL 动态背景 (纯 WebGL2, 无外部依赖)
 (function(){
