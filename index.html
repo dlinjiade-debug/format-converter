@@ -119,7 +119,7 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
 .mode-h{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
 .mode-h label{font:700 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
 .mode-note{font-size:11px;color:var(--text3);line-height:1.5}
-.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .seg input{position:absolute;opacity:0;pointer-events:none}
 .seg label{display:block;margin:0;padding:11px 10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.015);cursor:pointer;text-align:center;color:var(--text2);transition:all .2s}
 .seg label b{display:block;font-size:13px;color:var(--text);margin-bottom:3px}
@@ -201,7 +201,7 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
 
 @media(max-width:520px){
   .page{padding:32px 14px 60px}.hero h1{font-size:34px}.body{padding:20px}
-  .fg{grid-template-columns:repeat(3,1fr)}.drop{padding:36px 16px}
+  .fg{grid-template-columns:repeat(3,1fr)}.seg{grid-template-columns:1fr}.drop{padding:36px 16px}
   .tab{font-size:12px;padding:10px 4px}.stats{gap:20px}.orb{opacity:.06}
 }
 </style>
@@ -265,8 +265,10 @@ body{font-family:var(--sans);background:transparent;color:var(--text);line-heigh
             <div class="mode-note" id="pdfModeHint">文本优先适合编辑，版式优先适合保真。</div>
           </div>
           <div class="seg">
-            <input type="radio" name="pdfMode" id="pdfModeText" value="text" checked>
+            <input type="radio" name="pdfMode" id="pdfModeText" value="text">
             <label for="pdfModeText"><b>文本优先</b><span>可编辑 / 段落更自然</span></label>
+            <input type="radio" name="pdfMode" id="pdfModeHybrid" value="hybrid" checked>
+            <label for="pdfModeHybrid"><b>智能混合</b><span>文字可编辑 / 图片保留</span></label>
             <input type="radio" name="pdfMode" id="pdfModeLayout" value="layout">
             <label for="pdfModeLayout"><b>版式优先</b><span>更像原稿 / 页面图片</span></label>
           </div>
@@ -394,6 +396,27 @@ async function heic2img(f,tf){
 const $=id=>document.getElementById(id);
 const ext=n=>n.split('.').pop().toLowerCase();
 const sz=b=>b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';
+const PDF_PAGE_LIMIT=300;
+const EXPORT_PAGE={width:794,height:1123,padX:60,padY:54};
+function yieldToBrowser(){
+  return new Promise(resolve=>{
+    if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>resolve());
+    else setTimeout(resolve,0);
+  });
+}
+function releaseCanvas(canvas){
+  if(canvas){canvas.width=1;canvas.height=1;canvas.remove?.();}
+}
+async function waitForImages(root,timeout=15000){
+  const images=Array.from(root.querySelectorAll('img'));
+  await Promise.all(images.map(img=>new Promise(resolve=>{
+    if(img.complete&&img.naturalWidth>0){resolve();return}
+    let done=false;
+    const finish=()=>{if(done)return;done=true;img.removeEventListener('load',finish);img.removeEventListener('error',finish);resolve()};
+    img.addEventListener('load',finish,{once:true});img.addEventListener('error',finish,{once:true});
+    setTimeout(finish,timeout);
+  })));
+}
 const ICO={pdf:'pdf',doc:'doc',docx:'doc',ppt:'ppt',pptx:'ppt',xls:'xls',xlsx:'xls',csv:'xls',txt:'txt',html:'web',htm:'web',md:'txt',png:'img',jpg:'img',jpeg:'img',gif:'img',bmp:'img',webp:'img',svg:'img',tiff:'img',heic:'img',heif:'img',mp4:'vid',mov:'vid',avi:'vid',mkv:'vid',webm:'vid',wmv:'vid',flv:'vid',mp3:'aud',wav:'aud',ogg:'aud',aac:'aud',flac:'aud'};
 const LBL={pdf:'PDF',docx:'DOCX',doc:'DOC',pptx:'PPTX',ppt:'PPT',xlsx:'XLSX',xls:'XLS',csv:'CSV',txt:'TXT',html:'HTML',htm:'HTM',md:'MD',png:'PNG',jpg:'JPG',jpeg:'JPG',gif:'GIF',bmp:'BMP',webp:'WEBP',svg:'SVG',tiff:'TIFF',heic:'HEIC',heif:'HEIF',mp4:'MP4',mov:'MOV',avi:'AVI',mkv:'MKV',webm:'WEBM',wmv:'WMV',flv:'FLV',mp3:'MP3',wav:'WAV',ogg:'OGG',aac:'AAC',flac:'FLAC'};
 
@@ -401,7 +424,7 @@ const R={
   pdf:[{f:'docx',n:'Word 文档'},{f:'txt',n:'纯文本'},{f:'html',n:'HTML 网页'},{f:'png',n:'PNG 图片'},{f:'jpg',n:'JPG 图片'}],
   docx:[{f:'pdf',n:'PDF'},{f:'html',n:'HTML 网页'},{f:'txt',n:'纯文本'}],
   doc:[{f:'pdf',n:'PDF'},{f:'html',n:'HTML 网页'},{f:'txt',n:'纯文本'}],
-  pptx:[{f:'pdf',n:'PDF'},{f:'png',n:'PNG 图片'}],
+  pptx:[{f:'pdf',n:'PDF'},{f:'docx',n:'Word 文档'},{f:'png',n:'PNG 图片'}],
   xlsx:[{f:'csv',n:'CSV'},{f:'html',n:'HTML 网页'}],
   xls:[{f:'csv',n:'CSV'},{f:'xlsx',n:'XLSX'}],
   csv:[{f:'xlsx',n:'Excel'},{f:'txt',n:'纯文本'},{f:'html',n:'HTML 网页'}],
@@ -444,8 +467,11 @@ document.querySelectorAll('.tab').forEach(t=>{
 });
 
 // ====== Format Conversion ======
-let sf=null,st=null;
-function rst(){sf=null;st=null;$('fi2').classList.remove('show');$('fs').classList.remove('show');$('pdfMode').classList.remove('show');$('go').classList.remove('show');$('prog').classList.remove('show');$('res').classList.remove('show');$('res').innerHTML='';$('fg').innerHTML='';$('fi').value='';$('bar').className='bar ok';$('progD').textContent=''}
+let sf=null,st=null,activeResultUrl=null;
+function rst(){
+  if(activeResultUrl){URL.revokeObjectURL(activeResultUrl);activeResultUrl=null}
+  sf=null;st=null;$('fi2').classList.remove('show');$('fs').classList.remove('show');$('pdfMode').classList.remove('show');$('go').classList.remove('show');$('prog').classList.remove('show');$('res').classList.remove('show');$('res').innerHTML='';$('fg').innerHTML='';$('fi').value='';$('bar').className='bar ok';$('progD').textContent=''
+}
 function hook(el,ev,fn){el.addEventListener(ev,fn)}
 hook($('drop'),'dragover',e=>{e.preventDefault();$('drop').classList.add('over')});
 hook($('drop'),'dragleave',()=>$('drop').classList.remove('over'));
@@ -455,7 +481,7 @@ hook($('fiX'),'click',rst);
 
 function pdfModeValue(){
   const el=document.querySelector('input[name="pdfMode"]:checked');
-  return el?el.value:'text';
+  return el?el.value:'hybrid';
 }
 
 function updatePdfMode(){
@@ -464,8 +490,8 @@ function updatePdfMode(){
   $('pdfMode').classList.toggle('show',show);
   if(show){
     $('pdfModeHint').textContent=st==='docx'
-      ?'文本优先生成可编辑 Word；版式优先把每页嵌入 Word，最接近原 PDF。'
-      :'文本优先提取正文结构；版式优先输出页面图片，视觉最稳。';
+      ?'文本优先生成可编辑 Word；智能混合保留图文页；版式优先把每页嵌入 Word。'
+      :'文本优先提取正文结构；智能混合保留图文页；版式优先输出页面图片。';
   }
 }
 
@@ -498,8 +524,8 @@ hook($('go'),'click',async()=>{
 
     // === PDF ===
     if(k==='pdf->txt'){try{blob=await pdf2txt(sf)}catch(e){throw new Error('PDF 解析失败: '+e.message)}}
-    else if(k==='pdf->docx'){try{blob=pdfModeValue()==='layout'?await pdf2docxLayout(sf):await pdf2docx(sf)}catch(e){throw new Error('PDF 转 Word 失败: '+e.message)}}
-    else if(k==='pdf->html'){try{blob=pdfModeValue()==='layout'?await pdf2htmlLayout(sf):await pdf2html(sf)}catch(e){throw new Error('PDF 转 HTML 失败: '+e.message)}}
+    else if(k==='pdf->docx'){try{const mode=pdfModeValue();blob=mode==='layout'?await pdf2docxLayout(sf):await pdf2docx(sf,mode)}catch(e){throw new Error('PDF 转 Word 失败: '+e.message)}}
+    else if(k==='pdf->html'){try{const mode=pdfModeValue();blob=mode==='layout'?await pdf2htmlLayout(sf):await pdf2html(sf,mode)}catch(e){throw new Error('PDF 转 HTML 失败: '+e.message)}}
     else if(k==='pdf->png'||k==='pdf->jpg'||k==='pdf->jpeg')blob=await pdf2img(sf,st);
     // === Word ===
     else if(k==='docx->pdf'||k==='doc->pdf'){try{blob=await word2pdf(sf)}catch(e){throw new Error('Word 转 PDF 失败: '+e.message)}}
@@ -507,6 +533,7 @@ hook($('go'),'click',async()=>{
     else if(k==='docx->txt'||k==='doc->txt'){try{blob=await word2txt(sf)}catch(e){throw new Error('Word 转文本失败: '+e.message)}}
     // === PPT ===
     else if(k==='pptx->pdf'){blob=await ppt2pdf(sf)}
+    else if(k==='pptx->docx'){blob=await ppt2docx(sf)}
     else if(k==='pptx->png'){blob=await ppt2png(sf)}
     // === MD ===
     else if(k==='md->html')blob=await md2html(sf);
@@ -557,7 +584,8 @@ hook($('go'),'click',async()=>{
 });
 
 function show(blob,name,c){
-  const u=URL.createObjectURL(blob);
+  if(activeResultUrl)URL.revokeObjectURL(activeResultUrl);
+  const u=URL.createObjectURL(blob);activeResultUrl=u;
   c.innerHTML=`<div class="res-ok"><div class="ri"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><div class="rt">转换完成</div><div class="rs">${name} (${sz(blob.size)})</div><a class="dl" href="${u}" download="${name}">下载文件</a></div><button class="rst" onclick="rst()">转换其他文件</button>`;
   c.classList.add('show');
   const a=document.createElement('a');a.href=u;a.download=name;a.click();
@@ -662,20 +690,33 @@ function looksLikeHeading(line,avgFontSize){
     (mostlyBold&&text.length<42);
 }
 
+async function pdfPageVisualInfo(page){
+  try{
+    const ops=await page.getOperatorList();
+    const lib=await loadPdfJs();
+    const imageOps=[lib.OPS?.paintImageMaskXObject,lib.OPS?.paintImageXObject,lib.OPS?.paintImageXObjectRepeat,lib.OPS?.paintSolidColorImageMask].filter(v=>typeof v==='number');
+    return {hasImages:ops.fnArray.some(fn=>imageOps.includes(fn))};
+  }catch(e){
+    return {hasImages:false};
+  }
+}
+
 async function pdfPages(f){
   $('progD').textContent='正在打开 PDF...';
   const doc=await openPdf(f);
   const total=doc.numPages;
-  if(total>80)throw new Error(`PDF 页数过多（${total}页），最多支持 80 页，请拆分后重试`);
+  if(total>PDF_PAGE_LIMIT)throw new Error(`PDF has ${total} pages. Browser conversion is limited to ${PDF_PAGE_LIMIT} pages; split the file and retry.`);
   const pages=[];
   for(let i=1;i<=total;i++){
     $('progD').textContent=`正在解析第 ${i}/${total} 页...`;
+    let pg=null;
     try{
-      const pg=await doc.getPage(i);
+      pg=await doc.getPage(i);
       const vp=pg.getViewport({scale:1});
+      const visual=await pdfPageVisualInfo(pg);
       const tc=await pg.getTextContent();
       const items=(tc.items||[]).filter(it=>it.str&&it.str.trim());
-      if(!items.length){pages.push({text:'',hasText:false});continue}
+      if(!items.length){pages.push({text:'',hasText:false,hasImages:visual.hasImages,width:vp.width,height:vp.height});pg.cleanup?.();continue}
 
       // 动态行距阈值：基于平均字号
       const avgFont=items.reduce((s,it)=>s+Math.max(Math.abs(it.transform[3]||10),Math.abs(it.height||0),8),0)/items.length;
@@ -716,12 +757,14 @@ async function pdfPages(f){
       for(let li=0;li<fmtLines.length-1;li++)fmtLines[li+1].gap=Math.abs(fmtLines[li].y-fmtLines[li+1].y);
 
       const text=fmtLines.map(l=>l.text).filter(Boolean).join('\n').trim();
-      // 图文混合检测: 文字少于3行的页面整体渲染为图片，保留视觉效果
-      const richLines=fmtLines.filter(l=>(l.text||'').replace(/\s/g,'').length>2).length;
-      pages.push({text,hasText:richLines>=3&&!!text,fmtLines,width:vp.width,height:vp.height,avgFont});
+      pages.push({text,hasText:!!text,hasImages:visual.hasImages,fmtLines,width:vp.width,height:vp.height,avgFont});
+      pg.cleanup?.();
     }catch(e){
       console.warn(`Page ${i}:`,e);
       pages.push({text:'',hasText:false});
+    }finally{
+      try{pg?.cleanup?.()}catch(e){}
+      await yieldToBrowser();
     }
   }
   pages._doc=doc;
@@ -735,7 +778,7 @@ async function pdf2txt(f){
   return new Blob([text],{type:'text/plain;charset=utf-8'});
 }
 
-async function pdf2docx(f){
+async function pdf2docx(f,mode='hybrid'){
   await ensureDocx();
   $('progD').textContent='正在解析 PDF...';
   const pages=await pdfPages(f);
@@ -806,7 +849,8 @@ async function pdf2docx(f){
       }));
     }
 
-    if(pg.hasText&&pg.fmtLines){
+    const shouldRenderImage=!pg.hasText||(mode==='hybrid'&&pg.hasImages);
+    if(!shouldRenderImage&&pg.fmtLines){
       hasAnyContent=true;
       let lines=pg.fmtLines.filter(l=>l.text&&l.text.trim());
       const avgFontSize=pg.avgFont||lines.reduce((s,l)=>s+(l.items[0]?.fontSize||12),0)/Math.max(lines.length,1);
@@ -893,6 +937,7 @@ async function pdf2docx(f){
           spacing:{after:200}
         }));
         hasAnyContent=true;
+        releaseCanvas(canvas);
       }catch(e){
         console.warn('Page render failed:',e);
         children.push(new Paragraph({
@@ -901,6 +946,7 @@ async function pdf2docx(f){
         }));
       }
     }
+    await yieldToBrowser();
   }
 
   // 关闭 PDF
@@ -918,8 +964,10 @@ async function pdf2docxLayout(f){
   const{Document,Packer,Paragraph,ImageRun,AlignmentType}=docx;
   const children=[];
   try{
-    for(let i=1;i<=docPdf.numPages;i++){
-      $('progD').textContent=`正在渲染第 ${i}/${docPdf.numPages} 页...`;
+    if(docPdf.numPages>PDF_PAGE_LIMIT)throw new Error(`PDF has ${docPdf.numPages} pages. Browser conversion is limited to ${PDF_PAGE_LIMIT} pages; split the file and retry.`);
+    const total=docPdf.numPages;
+    for(let i=1;i<=total;i++){
+      $('progD').textContent=`正在渲染第 ${i}/${total} 页...`;
       const canvas=await renderPage(docPdf,i,2.2);
       const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.94));
       const bytes=new Uint8Array(await blob.arrayBuffer());
@@ -930,19 +978,31 @@ async function pdf2docxLayout(f){
         alignment:AlignmentType.CENTER,
         spacing:{after:260}
       }));
+      releaseCanvas(canvas);
+      await yieldToBrowser();
     }
   }finally{try{docPdf.destroy()}catch(e){}}
   const out=new Document({sections:[{properties:{page:{margin:{top:720,right:720,bottom:720,left:720}}},children}]});
   return Packer.toBlob(out);
 }
 
-async function pdf2html(f){
+async function pdf2html(f,mode='hybrid'){
   const pages=await pdfPages(f);
   const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const hasText=pages.some(p=>p.hasText);
-  if(!hasText)throw new Error('PDF 中没有可提取的文字（可能是扫描件）');
-  const body=pages.map((pg,i)=>{
+  const bodyParts=[];
+  for(let i=0;i<pages.length;i++){
+    const pg=pages[i];
     let html='';
+    if(!pg.hasText||(mode==='hybrid'&&pg.hasImages)){
+      $('progD').textContent=`正在保留第 ${i+1}/${pages.length} 页图片...`;
+      const canvas=await renderPage(pages._doc,i+1,1.8);
+      const data=canvas.toDataURL('image/jpeg',0.92);
+      releaseCanvas(canvas);
+      html=`<section style="margin:24px auto;max-width:800px;padding:0;background:#fff;border:1px solid #e5e5e5;overflow:hidden"><img src="${data}" alt="第 ${i+1} 页" style="display:block;width:100%;height:auto">${pg.text?`<details style="padding:14px 18px"><summary>提取文字</summary><pre style="white-space:pre-wrap">${esc(pg.text)}</pre></details>`:''}</section>`;
+      bodyParts.push(html);
+      await yieldToBrowser();
+      continue;
+    }
     if(pg.fmtLines&&pg.fmtLines.length){
       pg.fmtLines.forEach(line=>{
         if(!line.items||!line.items.length)return;
@@ -960,8 +1020,10 @@ async function pdf2html(f){
     }else{
       html=`<section style="margin:24px auto;max-width:800px;padding:36px 40px;background:#fff;border:1px solid #e5e5e5;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.04)"><pre style="white-space:pre-wrap;font-family:Georgia,'Noto Serif SC',serif;line-height:1.9;font-size:15px;color:#1a1a1a">${esc(pg.text)}</pre>${pages.length>1?`<div style="text-align:center;color:#bbb;font-size:12px;margin-top:20px;padding-top:16px;border-top:1px solid #f0f0f0">第 ${i+1} 页</div>`:''}</section>`;
     }
-    return html;
-  }).join('\n');
+    bodyParts.push(html);
+    await yieldToBrowser();
+  }
+  const body=bodyParts.join('\n');
   if(pages._doc)try{pages._doc.destroy()}catch(e){}
   return new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${f.name}</title><style>*{margin:0;box-sizing:border-box}body{background:#f7f7f5;padding:24px 16px;font-family:system-ui,sans-serif}</style></head><body>${body}</body></html>`],{type:'text/html;charset=utf-8'});
 }
@@ -971,10 +1033,14 @@ async function pdf2htmlLayout(f){
   const doc=await openPdf(f);
   const pages=[];
   try{
-    for(let i=1;i<=doc.numPages;i++){
-      $('progD').textContent=`正在渲染第 ${i}/${doc.numPages} 页...`;
+    if(doc.numPages>PDF_PAGE_LIMIT)throw new Error(`PDF has ${doc.numPages} pages. Browser conversion is limited to ${PDF_PAGE_LIMIT} pages; split the file and retry.`);
+    const total=doc.numPages;
+    for(let i=1;i<=total;i++){
+      $('progD').textContent=`正在渲染第 ${i}/${total} 页...`;
       const canvas=await renderPage(doc,i,2.2);
       pages.push(`<section class="page"><img src="${canvas.toDataURL('image/jpeg',0.94)}" alt="第 ${i} 页"></section>`);
+      releaseCanvas(canvas);
+      await yieldToBrowser();
     }
   }finally{try{doc.destroy()}catch(e){}}
   const html=`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${f.name}</title><style>*{box-sizing:border-box}body{margin:0;padding:24px 12px;background:#eceff3;font-family:system-ui,"Microsoft YaHei",sans-serif}.page{max-width:980px;margin:0 auto 22px;background:#fff;box-shadow:0 10px 30px rgba(15,23,42,.12);border-radius:8px;overflow:hidden}.page img{display:block;width:100%;height:auto}</style></head><body>${pages.join('')}</body></html>`;
@@ -984,11 +1050,11 @@ async function pdf2htmlLayout(f){
 // PDF → 图片 (渲染首页为高质量图片)
 async function pdf2img(f,tf){
   $('progD').textContent='正在渲染 PDF...';
-  const pages=await pdfPages(f);
-  const canvas=await renderPage(pages._doc,1,3);
-  if(pages._doc)try{pages._doc.destroy()}catch(e){}
+  const doc=await openPdf(f);
+  const canvas=await renderPage(doc,1,3);
+  try{doc.destroy()}catch(e){}
   const m={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg'};
-  return new Promise(r=>canvas.toBlob(r,m[tf]||'image/png',tf==='jpg'||tf==='jpeg'?.92:.95));
+  return new Promise(r=>canvas.toBlob(blob=>{releaseCanvas(canvas);r(blob)},m[tf]||'image/png',tf==='jpg'||tf==='jpeg'?.92:.95));
 }
 
 // ====== Word Engine (mammoth) ======
@@ -1031,29 +1097,143 @@ function wordHtmlDocument(name,body){
   return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${name}</title><style>${WORD_CSS}</style></head><body><main class="doc-page">${body}</main></body></html>`;
 }
 
-async function docHtmlToPdf(html,title='output'){
+function copyAttributes(from,to){
+  Array.from(from.attributes||[]).forEach(a=>to.setAttribute(a.name,a.value));
+  return to;
+}
+
+function makeTableChunk(table,headerRows,rows){
+  const out=copyAttributes(table,document.createElement('table'));
+  if(headerRows.length){
+    const thead=copyAttributes(table.tHead||document.createElement('thead'),document.createElement('thead'));
+    headerRows.forEach(row=>thead.appendChild(row.cloneNode(true)));
+    out.appendChild(thead);
+  }
+  const body=document.createElement('tbody');
+  rows.forEach(row=>body.appendChild(row.cloneNode(true)));
+  out.appendChild(body);
+  return out;
+}
+
+function splitLargeTables(host,limit){
+  Array.from(host.children).filter(el=>el.tagName==='TABLE').forEach(table=>{
+    const rows=Array.from(table.rows||[]);
+    if(rows.length<4||table.getBoundingClientRect().height<=limit)return;
+    const headerRows=table.tHead?Array.from(table.tHead.rows):rows[0].querySelector('th')?[rows[0]]:[];
+    const bodyRows=rows.filter(row=>!headerRows.includes(row));
+    if(!bodyRows.length)return;
+    const measure=document.createElement('div');
+    measure.style.cssText=`position:absolute;left:0;top:0;width:${EXPORT_PAGE.width-EXPORT_PAGE.padX*2}px;visibility:hidden;pointer-events:none`;
+    host.appendChild(measure);
+    const chunks=[];let current=[];
+    const flush=()=>{if(current.length){chunks.push(makeTableChunk(table,headerRows,current));current=[]}};
+    bodyRows.forEach(row=>{
+      current.push(row);
+      const trial=makeTableChunk(table,headerRows,current);
+      measure.replaceChildren(trial);
+      const height=trial.getBoundingClientRect().height;
+      if(height>limit&&current.length>1){
+        const last=current.pop();
+        flush();
+        current=[last];
+      }
+    });
+    flush();
+    measure.remove();
+    if(chunks.length>1){
+      const frag=document.createDocumentFragment();
+      chunks.forEach((chunk,index)=>{if(index)frag.appendChild(document.createElement('br'));frag.appendChild(chunk)});
+      table.replaceWith(frag);
+    }
+  });
+}
+
+function blockHeight(el){
+  const rect=el.getBoundingClientRect();
+  const css=getComputedStyle(el);
+  return Math.max(1,rect.height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0));
+}
+
+function normalizeHtmlBlocks(host){
+  Array.from(host.childNodes).forEach(node=>{
+    if(node.nodeType===3&&node.textContent.trim()){
+      const p=document.createElement('p');
+      p.textContent=node.textContent;
+      node.replaceWith(p);
+    }else if(node.nodeType===3){node.remove()}
+  });
+}
+
+async function htmlToPdfPages(html,title='output'){
   await ensure('html2pdf');
+  await ensure('PDFLib');
   const parsed=new DOMParser().parseFromString(html,'text/html');
-  const bodyHtml=parsed.body&&parsed.body.children.length?parsed.body.innerHTML:html;
-  const div=document.createElement('div');
-  div.className='doc-page';
-  div.innerHTML=bodyHtml;
-  div.style.cssText='background:#fff;color:#1f2933;font-family:"Plus Jakarta Sans","Microsoft YaHei","PingFang SC",system-ui,sans-serif;line-height:1.82;font-size:15px;width:794px;min-height:1123px;padding:54px 60px;word-break:break-word';
+  const bodyHtml=parsed.body&&parsed.body.innerHTML?parsed.body.innerHTML:html;
+  const sourceStyles=Array.from(parsed.head?.querySelectorAll('style')||[]).map(s=>s.textContent||'').join('\n');
   const style=document.createElement('style');
-  style.textContent=DOC_EXPORT_CSS+'.doc-page{margin:0 auto}';
+  style.textContent=DOC_EXPORT_CSS+'\n'+sourceStyles+'\n.doc-page{margin:0!important;max-width:none!important}';
   document.head.appendChild(style);
-  document.body.appendChild(div);
-  div.querySelectorAll('img').forEach(img=>{img.style.maxWidth='100%';img.style.height='auto';img.style.display='block'});
-  div.querySelectorAll('table').forEach(t=>{t.style.width='100%';t.style.borderCollapse='collapse'});
+
+  const host=document.createElement('div');
+  host.style.cssText=`position:fixed;left:-100000px;top:0;width:${EXPORT_PAGE.width-EXPORT_PAGE.padX*2}px;visibility:hidden;pointer-events:none;background:#fff;color:#1f2933;font-family:"Plus Jakarta Sans","Microsoft YaHei","PingFang SC",system-ui,sans-serif;line-height:1.82;font-size:15px;word-break:break-word`;
+  host.innerHTML=bodyHtml||'<p></p>';
+  document.body.appendChild(host);
   try{
-    return await html2pdf().set({
-      margin:[0,0,0,0],
-      filename:(title||'output').replace(/\.[^.]+$/,'')+'.pdf',
-      pagebreak:{mode:['css','legacy'],avoid:['tr','img','blockquote','pre']},
-      html2canvas:{scale:2,useCORS:true,letterRendering:true,logging:false,backgroundColor:'#ffffff'},
-      jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}
-    }).from(div).outputPdf('blob');
-  }finally{document.body.removeChild(div);document.head.removeChild(style)}
+    normalizeHtmlBlocks(host);
+    host.querySelectorAll('img').forEach(img=>{img.style.maxWidth='100%';img.style.height='auto';img.style.display='block'});
+    host.querySelectorAll('table').forEach(table=>{table.style.width='100%';table.style.borderCollapse='collapse'});
+    await waitForImages(host);
+    splitLargeTables(host,EXPORT_PAGE.height-EXPORT_PAGE.padY*2-24);
+
+    const blocks=Array.from(host.children);
+    const contentHeight=EXPORT_PAGE.height-EXPORT_PAGE.padY*2;
+    const pageBlocks=[];let current=[];let currentHeight=0;
+    blocks.forEach(block=>{
+      const height=blockHeight(block);
+      if(current.length&&currentHeight+height>contentHeight){pageBlocks.push(current);current=[];currentHeight=0}
+      current.push(block);
+      currentHeight+=Math.min(height,contentHeight);
+    });
+    if(current.length)pageBlocks.push(current);
+    if(!pageBlocks.length)pageBlocks.push([]);
+
+    const{PDFDocument}=PDFLib;
+    const merged=await PDFDocument.create();
+    for(let i=0;i<pageBlocks.length;i++){
+      $('progD').textContent=`Rendering document page ${i+1}/${pageBlocks.length}...`;
+      const page=document.createElement('div');
+      page.className='doc-page export-page';
+      page.style.cssText=`width:${EXPORT_PAGE.width}px;height:${EXPORT_PAGE.height}px;overflow:hidden;box-sizing:border-box;padding:${EXPORT_PAGE.padY}px ${EXPORT_PAGE.padX}px;margin:0;background:#fff;color:#1f2933;word-break:break-word`;
+      pageBlocks[i].forEach(block=>{
+        const clone=block.cloneNode(true);
+        page.appendChild(clone);
+        if(clone.tagName==='IMG'&&clone.getBoundingClientRect().height>contentHeight){clone.style.maxHeight=contentHeight+'px';clone.style.objectFit='contain'}
+      });
+      document.body.appendChild(page);
+      await waitForImages(page);
+      const pageBlob=await html2pdf().set({
+        margin:[0,0,0,0],
+        filename:(title||'output').replace(/\.[^.]+$/,'')+'-'+(i+1)+'.pdf',
+        pagebreak:{mode:['css','legacy'],avoid:['tr','img','blockquote','pre']},
+        html2canvas:{scale:2,useCORS:true,letterRendering:true,logging:false,backgroundColor:'#ffffff'},
+        jsPDF:{unit:'px',format:[EXPORT_PAGE.width,EXPORT_PAGE.height],orientation:'portrait'}
+      }).from(page).outputPdf('blob');
+      const source=await PDFDocument.load(await pageBlob.arrayBuffer());
+      const copied=await merged.copyPages(source,source.getPageIndices());
+      copied.forEach(p=>merged.addPage(p));
+      page.remove();
+      await yieldToBrowser();
+    }
+    const bytes=await merged.save({useObjectStreams:true});
+    return new Blob([bytes],{type:'application/pdf'});
+  }finally{
+    host.remove();
+    style.remove();
+  }
+}
+
+async function docHtmlToPdf(html,title='output'){
+  return htmlToPdfPages(html,title);
 }
 
 async function word2html(f){
@@ -1076,105 +1256,224 @@ async function word2pdf(f){
   return docHtmlToPdf(r.value,f.name);
 }
 
-// ====== PPT Engine (canvas-based slide render) ======
+// ====== PPT Engine (incremental OOXML slide render) ======
 const PT='http://schemas.openxmlformats.org/presentationml/2006/main';
 const AD='http://schemas.openxmlformats.org/drawingml/2006/main';
+function pptXmlElements(root,local){
+  if(!root)return [];
+  try{
+    const ns=Array.from(root.getElementsByTagNameNS('*',local));
+    if(ns.length)return ns;
+  }catch(e){}
+  return Array.from(root.getElementsByTagName('a:'+local)||[]);
+}
+function pptXmlFirst(root,local){return pptXmlElements(root,local)[0]||null}
+function pptAttrNumber(node,name,fallback=0){
+  const n=Number(node?.getAttribute(name));
+  return Number.isFinite(n)?n:fallback;
+}
+function pptImagePath(target){
+  const raw=decodeURIComponent(String(target||'').replace(/\\/g,'/'));
+  const stack=raw.startsWith('/')?[]:['ppt','slides'];
+  raw.replace(/^\/+/,'').split('/').forEach(part=>{
+    if(!part||part==='.')return;
+    if(part==='..')stack.pop();
+    else stack.push(part);
+  });
+  return stack.join('/');
+}
+function pptMimeForPath(path){
+  const e=String(path||'').split('.').pop().toLowerCase();
+  return {jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',gif:'image/gif',bmp:'image/bmp',svg:'image/svg+xml',webp:'image/webp'}[e]||'application/octet-stream';
+}
+function pptColor(root,fallback='#1a1a1a'){
+  const rgb=pptXmlFirst(root,'srgbClr')?.getAttribute('val');
+  if(rgb)return '#'+rgb;
+  const sys=pptXmlFirst(root,'sysClr')?.getAttribute('lastClr');
+  return sys?'#'+sys:fallback;
+}
+function pptTransform(node){
+  const xfrm=pptXmlFirst(node,'xfrm');
+  const off=xfrm&&pptXmlFirst(xfrm,'off');
+  const ext=xfrm&&pptXmlFirst(xfrm,'ext');
+  if(!off||!ext)return null;
+  return {x:pptAttrNumber(off,'x'),y:pptAttrNumber(off,'y'),w:pptAttrNumber(ext,'cx'),h:pptAttrNumber(ext,'cy')};
+}
+function pptReadText(node){
+  const paragraphs=pptXmlElements(node,'p');
+  const lines=[];
+  paragraphs.forEach(paragraph=>{
+    const runs=[];
+    Array.from(paragraph.childNodes||[]).forEach(child=>{
+      const local=child.localName||String(child.nodeName||'').split(':').pop();
+      if(local==='br'){runs.push({text:'\n'});return}
+      if(local!=='r'&&local!=='fld')return;
+      const text=pptXmlElements(child,'t').map(t=>t.textContent||'').join('');
+      if(!text)return;
+      const rPr=pptXmlFirst(child,'rPr');
+      runs.push({text,bold:rPr?.getAttribute('b')==='1',italics:rPr?.getAttribute('i')==='1',fontSize:pptAttrNumber(rPr,'sz',0)/100,color:pptColor(rPr,'#1a1a1a')});
+    });
+    if(runs.length)lines.push(runs);
+  });
+  return {lines,text:lines.map(line=>line.map(run=>run.text).join('')).join('\n').trim()};
+}
 async function pptParse(f){
   await ensure('JSZip');
-  const buf=await f.arrayBuffer();
-  const zip=await JSZip.loadAsync(buf);
-  // 读取幻灯片尺寸 (EMU)
+  const zip=await JSZip.loadAsync(await f.arrayBuffer());
   let sw=12192000,sh=6858000;
   if(zip.files['ppt/presentation.xml']){
     const px=await zip.files['ppt/presentation.xml'].async('string');
-    const m=px.match(/<p:sldSz[^>]*cx="(\d+)"[^>]*cy="(\d+)"/);
-    if(m){sw=+m[1];sh=+m[2]}
+    const xml=new DOMParser().parseFromString(px,'application/xml');
+    const sld=pptXmlFirst(xml,'sldSz');
+    if(sld){sw=pptAttrNumber(sld,'cx',sw);sh=pptAttrNumber(sld,'cy',sh)}
   }
-  const sf=Object.keys(zip.files).filter(x=>/^ppt\/slides\/slide\d+\.xml$/.test(x)).sort();
-  if(!sf.length)throw new Error('PPT 中没有找到幻灯片');
-  const slides=[];
-  for(const fn of sf){
-    const num=fn.match(/(\d+)/)[1];
-    const sx=await zip.files[fn].async('string');
-    // 解析关系文件获取图片映射
-    const rp=`ppt/slides/_rels/slide${num}.xml.rels`;
-    const imgMap={};
-    if(zip.files[rp]){
-      const rx=await zip.files[rp].async('string');
-      for(const m of rx.matchAll(/<Relationship[^>]*Id="([^"]*)"[^>]*Target="([^"]*)"[^>]*Type="[^"]*image[^"]*"/g)){
-        imgMap[m[1]]='ppt/'+(m[2].startsWith('../')?m[2].slice(3):m[2]);
+  const slides=Object.keys(zip.files).filter(x=>/^ppt\/slides\/slide\d+\.xml$/.test(x)).map(name=>({name,number:Number(name.match(/slide(\d+)\.xml$/)[1])})).sort((a,b)=>a.number-b.number);
+  if(!slides.length)throw new Error('PPT 中没有找到幻灯片');
+  return {zip,sw,sh,slides};
+}
+async function pptParseSlide(deck,descriptor){
+  const{zip}=deck;
+  const source=await zip.files[descriptor.name].async('string');
+  const xml=new DOMParser().parseFromString(source,'application/xml');
+  const relName=`ppt/slides/_rels/${descriptor.name.split('/').pop()}.rels`;
+  const relMap={};
+  if(zip.files[relName]){
+    const relXml=new DOMParser().parseFromString(await zip.files[relName].async('string'),'application/xml');
+    Array.from(relXml.getElementsByTagName('Relationship')).forEach(rel=>{
+      const type=rel.getAttribute('Type')||'';
+      if(type.includes('/image'))relMap[rel.getAttribute('Id')]=pptImagePath(rel.getAttribute('Target'));
+    });
+  }
+  const root=xml.documentElement;
+  const nodes=[...pptXmlElements(root,'sp'),...pptXmlElements(root,'pic'),...pptXmlElements(root,'graphicFrame')];
+  nodes.sort((a,b)=>{
+    const pos=a.compareDocumentPosition?.(b)||0;
+    return pos&4?-1:pos&2?1:0;
+  });
+  const shapes=[];
+  for(const node of nodes){
+    const transform=pptTransform(node);
+    if(!transform)continue;
+    const local=node.localName||String(node.nodeName||'').split(':').pop();
+    const textInfo=pptReadText(node);
+    const shape={...transform,text:textInfo.text,textLines:textInfo.lines,img:null,mime:'',order:shapes.length,color:pptColor(node),fontSize:0};
+    const firstRun=textInfo.lines[0]?.[0];
+    if(firstRun){shape.fontSize=firstRun.fontSize;shape.color=firstRun.color||shape.color}
+    if(local==='pic'){
+      const blip=pptXmlFirst(node,'blip');
+      const target=blip&&(blip.getAttribute('r:embed')||blip.getAttributeNS?.('http://schemas.openxmlformats.org/officeDocument/2006/relationships','embed'));
+      const path=relMap[target];
+      if(path&&zip.files[path]){
+        try{shape.img=await zip.files[path].async('uint8array');shape.mime=pptMimeForPath(path)}catch(e){console.warn('PPT image read:',e)}
       }
     }
-    // 解析形状
-    const shapes=[];
-    const spRe=/<p:sp[^>]*>([\s\S]*?)<\/p:sp>/g;
-    let spm;
-    while((spm=spRe.exec(sx))){
-      const xml=spm[1];
-      const xf=xml.match(/<a:xfrm>[\s\S]*?<a:off\s+x="(\d+)"\s+y="(\d+)"[\s\S]*?<a:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
-      if(!xf)continue;
-      const shape={x:+xf[1],y:+xf[2],w:+xf[3],h:+xf[4],text:'',img:null};
-      // 文字
-      shape.text=[...xml.matchAll(/<a:t[^>]*>([^<]*)<\/a:t>/g)].map(m=>m[1]).join('').trim();
-      // 图片
-      const emb=xml.match(/r:embed="([^"]+)"/);
-      if(emb&&imgMap[emb[1]]&&zip.files[imgMap[emb[1]]]){
-        try{shape.img=await zip.files[imgMap[emb[1]]].async('uint8array')}catch(e){}
-      }
-      if(shape.text||shape.img)shapes.push(shape);
-    }
-    slides.push({w:sw,h:sh,shapes});
+    if(shape.text||shape.img)shapes.push(shape);
   }
-  return slides;
+  const bg=pptXmlFirst(root,'bg');
+  return {w:deck.sw,h:deck.sh,shapes,background:bg?pptColor(bg,'#ffffff'):'#ffffff'};
+}
+function pptRelease(deck){
+  if(deck?.zip?.files)deck.zip.files={};
+}
+function pptDrawText(ctx,shape,x,y,w,h,scale){
+  const defaultSize=shape.fontSize||Math.max(12,Math.min(28,(shape.h/9525)*.55));
+  const lines=shape.textLines?.length?shape.textLines:[[{text:shape.text||'',color:shape.color}]];
+  let cursor=y+Math.max(9,defaultSize*96/72*scale);
+  const maxY=y+h;
+  for(const runs of lines){
+    let text=runs.map(run=>run.text).join('').replace(/\n/g,'');
+    if(!text){cursor+=defaultSize*1.2;continue}
+    const run=runs.find(x=>x.text)||{};
+    const fontPx=Math.max(9,Math.min(72,(run.fontSize||defaultSize)*96/72*scale));
+    ctx.font=`${run.bold?'700 ':''}${run.italics?'italic ':''}${fontPx}px "Microsoft YaHei",Arial,sans-serif`;
+    ctx.fillStyle=run.color||shape.color||'#1a1a1a';
+    const maxWidth=Math.max(4,w-12*scale);
+    let line='';
+    for(const ch of text){
+      const test=line+ch;
+      if(ctx.measureText(test).width>maxWidth&&line){
+        if(cursor<=maxY)ctx.fillText(line,x+6*scale,cursor);
+        line=ch;cursor+=fontPx*1.2;
+      }else line=test;
+    }
+    if(line&&cursor<=maxY)ctx.fillText(line,x+6*scale,cursor);
+    cursor+=fontPx*1.2;
+    if(cursor>maxY)break;
+  }
 }
 async function pptRenderSlide(slide){
-  const sf=2; // 2x scale for quality
+  const baseW=Math.max(1,slide.w/9525),baseH=Math.max(1,slide.h/9525);
+  const scale=Math.max(.5,Math.min(2,3200/Math.max(baseW,baseH),Math.sqrt(12000000/(baseW*baseH))));
   const c=document.createElement('canvas');
-  c.width=Math.round(slide.w/9525*sf);c.height=Math.round(slide.h/9525*sf);
-  const ctx=c.getContext('2d');
-  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,c.width,c.height);
+  c.width=Math.max(1,Math.round(baseW*scale));c.height=Math.max(1,Math.round(baseH*scale));
+  const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  ctx.fillStyle=slide.background||'#ffffff';ctx.fillRect(0,0,c.width,c.height);
   for(const sh of slide.shapes){
-    const sx=sh.x/9525*sf,sy=sh.y/9525*sf,sw=sh.w/9525*sf,shh=sh.h/9525*sf;
-    if(sh.img)try{
-      const img=await loadImg(new Blob([sh.img]));
-      ctx.drawImage(img,sx,sy,sw,shh);
-    }catch(e){console.warn('PPT image:',e)}
-    if(sh.text){
-      const fs=Math.max(Math.min(Math.round(shh*0.55),56),9);
-      ctx.fillStyle='#1a1a1a';ctx.font=`${fs}px "Microsoft YaHei",sans-serif`;
-      const mw=sw-12;let line='',ly=sy+fs;
-      for(const ch of sh.text){
-        const test=line+ch;
-        if(ctx.measureText(test).width>mw&&line.length){ctx.fillText(line,sx+6,ly);line=ch;ly+=fs+4}
-        else line=test;
-      }
-      if(line)ctx.fillText(line,sx+6,ly);
-    }
+    const sx=sh.x/9525*scale,sy=sh.y/9525*scale,sw=sh.w/9525*scale,shh=sh.h/9525*scale;
+    if(sh.img)try{ctx.drawImage(await loadImg(new Blob([sh.img],{type:sh.mime||'image/png'})),sx,sy,sw,shh)}catch(e){console.warn('PPT image:',e)}
+    if(sh.text)pptDrawText(ctx,sh,sx,sy,sw,shh,scale);
   }
   return c;
+}
+function canvasBlob(canvas,type,quality){
+  return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Canvas export failed')),type,quality));
 }
 async function ppt2pdf(f){
   $('progD').textContent='正在解析 PPT...';
   await ensure('jspdf');
-  const slides=await pptParse(f);
-  if(!slides.length)throw new Error('无法读取 PPT 内容');
+  const deck=await pptParse(f);
+  if(!deck.slides.length)throw new Error('无法读取 PPT 内容');
   const{jsPDF}=window.jspdf;let doc=null;
-  for(let i=0;i<slides.length;i++){
-    $('progD').textContent=`正在渲染第 ${i+1}/${slides.length} 页...`;
-    const c=await pptRenderSlide(slides[i]);
-    const ratio=c.width/c.height;
-    const pw=ratio>1.35?297:210,ph=ratio>1.35?210:297;
-    if(!doc){doc=new jsPDF({unit:'mm',format:[pw,ph],orientation:ratio>1.35?'landscape':'portrait'})}
-    else doc.addPage([pw,ph],ratio>1.35?'landscape':'portrait');
-    doc.addImage(c.toDataURL('image/jpeg',0.92),'JPEG',0,0,pw,ph);
-  }
-  return doc.output('blob');
+  try{
+    for(let i=0;i<deck.slides.length;i++){
+      $('progD').textContent=`正在渲染第 ${i+1}/${deck.slides.length} 页...`;
+      const slide=await pptParseSlide(deck,deck.slides[i]);
+      const c=await pptRenderSlide(slide);
+      const ratio=c.width/c.height;
+      const pw=ratio>1.35?297:210,ph=ratio>1.35?210:297;
+      if(!doc)doc=new jsPDF({unit:'mm',format:[pw,ph],orientation:ratio>1.35?'landscape':'portrait'});
+      else doc.addPage([pw,ph],ratio>1.35?'landscape':'portrait');
+      const jpeg=await canvasBlob(c,'image/jpeg',0.93);
+      const bytes=new Uint8Array(await jpeg.arrayBuffer());
+      try{doc.addImage(bytes,'JPEG',0,0,pw,ph)}catch(e){doc.addImage(c.toDataURL('image/jpeg',0.9),'JPEG',0,0,pw,ph)}
+      releaseCanvas(c);
+      await yieldToBrowser();
+    }
+    return doc.output('blob');
+  }finally{pptRelease(deck)}
+}
+async function ppt2docx(f){
+  $('progD').textContent='正在生成 Word 文档...';
+  await ensureDocx();
+  const deck=await pptParse(f);
+  const{Document,Packer,Paragraph,ImageRun,AlignmentType}=docx;
+  const children=[];
+  try{
+    for(let i=0;i<deck.slides.length;i++){
+      $('progD').textContent=`正在生成第 ${i+1}/${deck.slides.length} 页 Word...`;
+      const slide=await pptParseSlide(deck,deck.slides[i]);
+      const canvas=await pptRenderSlide(slide);
+      const jpeg=await canvasBlob(canvas,'image/jpeg',0.94);
+      const bytes=new Uint8Array(await jpeg.arrayBuffer());
+      const width=620,height=Math.max(1,Math.round(width*canvas.height/canvas.width));
+      children.push(new Paragraph({
+        children:[new ImageRun({data:bytes,transformation:{width,height},type:'jpg'})],
+        alignment:AlignmentType.CENTER,
+        spacing:{after:220}
+      }));
+      releaseCanvas(canvas);
+      await yieldToBrowser();
+    }
+  }finally{pptRelease(deck)}
+  return Packer.toBlob(new Document({sections:[{properties:{page:{margin:{top:720,right:720,bottom:720,left:720}}},children}]}));
 }
 async function ppt2png(f){
   $('progD').textContent='正在渲染 PPT...';
-  const slides=await pptParse(f);if(!slides.length)throw new Error('无法读取 PPT 内容');
-  const c=await pptRenderSlide(slides[0]);
-  return new Promise(r=>c.toBlob(r,'image/png'));
+  const deck=await pptParse(f);if(!deck.slides.length)throw new Error('无法读取 PPT 内容');
+  try{
+    const c=await pptRenderSlide(await pptParseSlide(deck,deck.slides[0]));
+    return await canvasBlob(c,'image/png').finally(()=>releaseCanvas(c));
+  }finally{pptRelease(deck)}
 }
 
 // ====== Other conversions ======
@@ -1308,7 +1607,16 @@ async function txt2docx(f){await ensureDocx();const t=await rd(f);const{Document
 async function img2img(f,tf){const img=await loadImg(f);const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;const ctx=c.getContext('2d');if(['jpg','jpeg','bmp'].includes(tf)){ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height)}ctx.drawImage(img,0,0);if(tf==='bmp'){const dataUrl=c.toDataURL('image/png');const res=await fetch(dataUrl);return res.blob()}const m={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',ico:'image/x-icon'};return new Promise(r=>c.toBlob(r,m[tf]||'image/png',tf==='webp'?.92:.95))}
 async function svg2img(f,tf){const s=await rd(f);const b=new Blob([s],{type:'image/svg+xml'});const img=await loadImg(b);const scale=Math.max(1,Math.ceil(1200/Math.max(img.naturalWidth||1,img.naturalHeight||1)));const c=document.createElement('canvas');c.width=(img.naturalWidth||800)*scale;c.height=(img.naturalHeight||600)*scale;const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(img,0,0,c.width,c.height);if(tf==='pdf')return c2pdf(c);return new Promise(r=>c.toBlob(r,{png:'image/png',jpg:'image/jpeg'}[tf]||'image/png',.95))}
 async function svg2pdf(f){return svg2img(f,'pdf')}
-function loadImg(b){return new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=URL.createObjectURL(b)})}
+function loadImg(b){
+  return new Promise((ok,no)=>{
+    const i=new Image();
+    const url=URL.createObjectURL(b);
+    const cleanup=()=>URL.revokeObjectURL(url);
+    i.onload=()=>{cleanup();ok(i)};
+    i.onerror=e=>{cleanup();no(e)};
+    i.src=url;
+  });
+}
 async function img2pdf(f){await ensure('jspdf');const img=await loadImg(f);const{jsPDF}=window.jspdf;const w=img.naturalWidth,h=img.naturalHeight;const doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0);doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h);return doc.output('blob')}
 async function c2pdf(c){await ensure('jspdf');const{jsPDF}=window.jspdf;const w=c.width,h=c.height;const doc=new jsPDF({unit:'px',format:[w,h],orientation:w>h?'landscape':'portrait'});doc.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,w,h);return doc.output('blob')}
 async function xls2csv(f){await ensure('XLSX');const d=await rAB(f);const wb=XLSX.read(d,{type:'array'});return new Blob(['﻿'+XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]])],{type:'text/csv;charset=utf-8'})}
