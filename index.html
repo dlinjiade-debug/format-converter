@@ -330,6 +330,7 @@ const LIBS={
   mammoth:'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js',
   jspdf:'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js',
   html2pdf:'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js',
+  html2canvas:'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
   XLSX:'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
   PDFLib:'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js',
   JSZip:'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
@@ -1256,7 +1257,78 @@ async function word2pdf(f){
   return docHtmlToPdf(r.value,f.name);
 }
 
-// ====== PPT Engine (incremental OOXML slide render) ======
+// ====== PPT Engine (high-fidelity OOXML render with a local fallback) ======
+const PPT_RENDERER_ASSET='./vendor/aiden0z-pptx-renderer.browser.es.js';
+let pptRendererPromise=null;
+async function ensurePptRenderer(){
+  if(window.__pptRendererModule)return window.__pptRendererModule;
+  if(!pptRendererPromise){
+    pptRendererPromise=import(PPT_RENDERER_ASSET).then(mod=>{
+      window.__pptRendererModule=mod;
+      return mod;
+    }).catch(error=>{
+      pptRendererPromise=null;
+      throw error;
+    });
+  }
+  return pptRendererPromise;
+}
+async function pptOpenHighFidelity(f){
+  const [renderer]=await Promise.all([ensurePptRenderer(),ensure('html2canvas')]);
+  const files=await renderer.parseZip(await f.arrayBuffer(),renderer.RECOMMENDED_ZIP_LIMITS);
+  const presentation=renderer.buildPresentation(files,{lazySlides:true});
+  if(!presentation?.slides?.length)throw new Error('高保真引擎没有找到幻灯片');
+  return {renderer,presentation};
+}
+async function pptRenderHighSlide(deck,index){
+  const{renderer,presentation}=deck;
+  const slide=presentation.slides[index];
+  if(!slide)throw new Error(`幻灯片 ${index+1} 不存在`);
+  const handle=renderer.renderSlide(presentation,slide,{pdfjs:false});
+  const root=handle.element;
+  const width=Math.max(1,Math.ceil(presentation.width||1280));
+  const height=Math.max(1,Math.ceil(presentation.height||720));
+  const stage=document.createElement('div');
+  stage.style.cssText=`position:fixed;left:-100000px;top:0;width:${width}px;height:${height}px;overflow:hidden;background:#fff;pointer-events:none`;
+  root.style.width=`${width}px`;root.style.height=`${height}px`;
+  stage.appendChild(root);document.body.appendChild(stage);
+  try{
+    await handle.ready;
+    if(document.fonts?.ready)await document.fonts.ready;
+    await yieldToBrowser();
+    // ECharts-backed chart nodes finish their canvas animation after the
+    // renderer promise resolves; let one stable paint reach html2canvas.
+    await new Promise(resolve=>setTimeout(resolve,320));
+    const scale=Math.max(.75,Math.min(2,3200/Math.max(width,height),Math.sqrt(12000000/(width*height))));
+    return await window.html2canvas(root,{
+      backgroundColor:'#fff',
+      scale,
+      width,
+      height,
+      windowWidth:width,
+      windowHeight:height,
+      useCORS:true,
+      allowTaint:false,
+      imageTimeout:20000,
+      logging:false
+    });
+  }finally{
+    handle.dispose();stage.remove();
+  }
+}
+function pptCloseHighFidelity(deck){
+  try{deck?.renderer?.dispose?.()}catch(e){}
+}
+function pptPdfPageSize(width,height){
+  const ratio=Math.max(.1,Number(width||1)/Math.max(1,Number(height||1)));
+  const landscape=ratio>=1;
+  const pw=landscape?297:210;
+  const ph=pw/ratio;
+  return {pw,ph,orientation:landscape?'landscape':'portrait'};
+}
+
+// The fallback renderer is intentionally kept for offline/file:// use and for
+// malformed decks that the full OOXML engine cannot safely open.
 const PT='http://schemas.openxmlformats.org/presentationml/2006/main';
 const AD='http://schemas.openxmlformats.org/drawingml/2006/main';
 function pptXmlElements(root,local){
@@ -1418,7 +1490,7 @@ async function pptRenderSlide(slide){
 function canvasBlob(canvas,type,quality){
   return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Canvas export failed')),type,quality));
 }
-async function ppt2pdf(f){
+async function ppt2pdfFallback(f){
   $('progD').textContent='正在解析 PPT...';
   await ensure('jspdf');
   const deck=await pptParse(f);
@@ -1429,20 +1501,19 @@ async function ppt2pdf(f){
       $('progD').textContent=`正在渲染第 ${i+1}/${deck.slides.length} 页...`;
       const slide=await pptParseSlide(deck,deck.slides[i]);
       const c=await pptRenderSlide(slide);
-      const ratio=c.width/c.height;
-      const pw=ratio>1.35?297:210,ph=ratio>1.35?210:297;
-      if(!doc)doc=new jsPDF({unit:'mm',format:[pw,ph],orientation:ratio>1.35?'landscape':'portrait'});
-      else doc.addPage([pw,ph],ratio>1.35?'landscape':'portrait');
+      const page=pptPdfPageSize(c.width,c.height);
+      if(!doc)doc=new jsPDF({unit:'mm',format:[page.pw,page.ph],orientation:page.orientation});
+      else doc.addPage([page.pw,page.ph],page.orientation);
       const jpeg=await canvasBlob(c,'image/jpeg',0.93);
       const bytes=new Uint8Array(await jpeg.arrayBuffer());
-      try{doc.addImage(bytes,'JPEG',0,0,pw,ph)}catch(e){doc.addImage(c.toDataURL('image/jpeg',0.9),'JPEG',0,0,pw,ph)}
+      try{doc.addImage(bytes,'JPEG',0,0,page.pw,page.ph)}catch(e){doc.addImage(c.toDataURL('image/jpeg',0.9),'JPEG',0,0,page.pw,page.ph)}
       releaseCanvas(c);
       await yieldToBrowser();
     }
     return doc.output('blob');
   }finally{pptRelease(deck)}
 }
-async function ppt2docx(f){
+async function ppt2docxFallback(f){
   $('progD').textContent='正在生成 Word 文档...';
   await ensureDocx();
   const deck=await pptParse(f);
@@ -1467,13 +1538,74 @@ async function ppt2docx(f){
   }finally{pptRelease(deck)}
   return Packer.toBlob(new Document({sections:[{properties:{page:{margin:{top:720,right:720,bottom:720,left:720}}},children}]}));
 }
-async function ppt2png(f){
+async function ppt2pngFallback(f){
   $('progD').textContent='正在渲染 PPT...';
   const deck=await pptParse(f);if(!deck.slides.length)throw new Error('无法读取 PPT 内容');
   try{
     const c=await pptRenderSlide(await pptParseSlide(deck,deck.slides[0]));
     return await canvasBlob(c,'image/png').finally(()=>releaseCanvas(c));
   }finally{pptRelease(deck)}
+}
+async function ppt2pdf(f){
+  try{
+    $('progD').textContent='正在加载高保真 PPT 渲染器...';
+    const deck=await pptOpenHighFidelity(f);
+    await ensure('jspdf');
+    const pdfApi=window.jspdf;const PdfCtor=pdfApi.jsPDF;
+    let doc=null;
+    try{
+      for(let i=0;i<deck.presentation.slides.length;i++){
+        $('progD').textContent=`正在还原第 ${i+1}/${deck.presentation.slides.length} 页图形...`;
+        const c=await pptRenderHighSlide(deck,i);
+        const page=pptPdfPageSize(c.width,c.height);
+        if(!doc)doc=new PdfCtor({unit:'mm',format:[page.pw,page.ph],orientation:page.orientation});
+        else doc.addPage([page.pw,page.ph],page.orientation);
+        const jpeg=await canvasBlob(c,'image/jpeg',0.95);
+        const bytes=new Uint8Array(await jpeg.arrayBuffer());
+        doc.addImage(bytes,'JPEG',0,0,page.pw,page.ph);
+        releaseCanvas(c);
+        await yieldToBrowser();
+      }
+      return doc.output('blob');
+    }finally{pptCloseHighFidelity(deck)}
+  }catch(error){
+    console.warn('High-fidelity PPT render unavailable; using compatibility renderer:',error);
+    return ppt2pdfFallback(f);
+  }
+}
+async function ppt2docx(f){
+  try{
+    $('progD').textContent='正在加载高保真 PPT 渲染器...';
+    const deck=await pptOpenHighFidelity(f);await ensureDocx();
+    const{Document,Packer,Paragraph,ImageRun,AlignmentType}=docx;
+    const children=[];
+    try{
+      for(let i=0;i<deck.presentation.slides.length;i++){
+        $('progD').textContent=`正在还原第 ${i+1}/${deck.presentation.slides.length} 页 Word...`;
+        const canvas=await pptRenderHighSlide(deck,i);
+        const jpeg=await canvasBlob(canvas,'image/jpeg',0.95);
+        const bytes=new Uint8Array(await jpeg.arrayBuffer());
+        const width=620,height=Math.max(1,Math.round(width*canvas.height/canvas.width));
+        children.push(new Paragraph({children:[new ImageRun({data:bytes,transformation:{width,height},type:'jpg'})],alignment:AlignmentType.CENTER,spacing:{after:220}}));
+        releaseCanvas(canvas);await yieldToBrowser();
+      }
+    }finally{pptCloseHighFidelity(deck)}
+    return Packer.toBlob(new Document({sections:[{properties:{page:{margin:{top:720,right:720,bottom:720,left:720}}},children}]}));
+  }catch(error){
+    console.warn('High-fidelity PPT Word render unavailable; using compatibility renderer:',error);
+    return ppt2docxFallback(f);
+  }
+}
+async function ppt2png(f){
+  try{
+    $('progD').textContent='正在加载高保真 PPT 渲染器...';
+    const deck=await pptOpenHighFidelity(f);
+    try{return await pptRenderHighSlide(deck,0).then(canvas=>canvasBlob(canvas,'image/png').finally(()=>releaseCanvas(canvas)))}
+    finally{pptCloseHighFidelity(deck)}
+  }catch(error){
+    console.warn('High-fidelity PPT PNG render unavailable; using compatibility renderer:',error);
+    return ppt2pngFallback(f);
+  }
 }
 
 // ====== Other conversions ======

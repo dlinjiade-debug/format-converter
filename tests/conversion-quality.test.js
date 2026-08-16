@@ -42,6 +42,10 @@ assert.match(html, /pptImagePath/, 'PPT relationship paths should be resolved');
 assert.match(html, /p:pic|pic/, 'PPT picture shapes should be handled');
 assert.match(html, /ppt2docx/, 'PPT to Word visual export should exist');
 assert.match(html, /sort\(\(a,b\)=>a\.number-b\.number\)/, 'PPT slides should sort numerically');
+assert.match(html, /aiden0z-pptx-renderer\.browser\.es\.js/, 'PPT should ship a pinned high-fidelity renderer');
+assert.match(html, /pptOpenHighFidelity/, 'PPT conversion should prefer the high-fidelity renderer');
+assert.match(html, /pptRenderHighSlide/, 'high-fidelity PPT slides should be rasterized before PDF export');
+assert.match(html, /html2canvas/, 'high-fidelity PPT DOM should be captured as a bitmap');
 
 // PDF pages containing raster/vector artwork must not silently become text-only.
 assert.match(html, /paintImageXObject|pdfPageVisualInfo/, 'PDF visual content should be detected');
