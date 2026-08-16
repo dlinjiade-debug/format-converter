@@ -47,8 +47,23 @@ assert.match(html, /pptOpenHighFidelity/, 'PPT conversion should prefer the high
 assert.match(html, /pptRenderHighSlide/, 'high-fidelity PPT slides should be rasterized before PDF export');
 assert.match(html, /html2canvas/, 'high-fidelity PPT DOM should be captured as a bitmap');
 
+// High-fidelity OOXML rendering should cover Word as well as PowerPoint and
+// enforce the same archive/image budgets used by mature browser viewers.
+assert.match(html, /ooxml\/docx\.mjs/, 'Word should ship a high-fidelity OOXML renderer');
+assert.match(html, /ooxml\/pptx\.mjs/, 'PPT should expose the OOXML renderer fallback');
+assert.match(html, /ensureOoxmlRenderer/, 'OOXML renderers should load lazily');
+assert.match(html, /OOXML_RESOURCE_LIMITS/, 'OOXML archive resource limits should be explicit');
+assert.match(html, /word2pdfHighFidelity/, 'Word to PDF should have a layout-preserving path');
+
+// Large jobs need a bounded sequential queue rather than retaining every
+// converted Blob and canvas at once.
+assert.match(html, /conversionQueue/, 'conversions should be serialized through a queue');
+assert.match(html, /MAX_BATCH_FILES/, 'batch conversion should have a file-count guard');
+assert.match(html, /conversionWarnings/, 'format-loss warnings should be surfaced');
+
 // PDF pages containing raster/vector artwork must not silently become text-only.
 assert.match(html, /paintImageXObject|pdfPageVisualInfo/, 'PDF visual content should be detected');
+assert.match(html, /hasVisual:hasImages\|\|hasGraphics/, 'PDF vector artwork should trigger visual preservation');
 assert.doesNotMatch(html, /if\(total>80\)throw/, 'PDF conversion should not hard-fail at 80 pages');
 
 console.log('conversion quality checks passed');
