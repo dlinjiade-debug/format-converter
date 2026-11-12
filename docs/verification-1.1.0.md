@@ -27,4 +27,13 @@
 
 最终便携 EXE 已实际启动，确认内置网页、原生路径桥、预览模块可用，渲染页面无 Node 权限。文件大小 118,823,427 字节；SHA-256：`62461178510A74CA2F0309386C30EF674032D811583FDE08BCF9D3A2F6AF2551`。
 
-公开 Pages 部署仍需发布后的线上复核。
+发布后的公网复核已通过：
+
+- https://dlinjiade-debug.github.io/format-converter/workbench/：实际上传合成双页 PPT、转换、两页预览、手动下载 PDF；零外部资源请求、零页面异常。
+- 原站首页 HTTP 200，保留上游 `56b731a` 的引擎并增加工作台入口；Pages 静态分支 `codex/public-site` 的部署提交为 `10071d9`。
+- `site-build.json` 的工作台源为 `72435a7`，生产文件无未提交修改。
+- v1.1.0 EXE 下载 HTTP 200、大小正确；GitHub 服务器返回的资产 digest 与上述 SHA-256 完全一致，校验文件也可公开下载。
+- 390px 手机视口设置面板无横向溢出，已截图核对目录、字体和参考 PDF 控件。
+- GitHub Ubuntu 自动测试 `npm run test:all` 已全部通过：[运行 43134375252](https://github.com/dlinjiade-debug/format-converter/actions/runs/43134375252)，验证的运行时代码提交为 `72435a7`。后续发布记录只改文档，不重写已验证的运行库或 EXE。
+
+源代码仍在 Draft PR #1。主分支后续独立变更产生合并冲突，未执行合并或覆盖 master；公开部署不依赖该 PR 合并。
