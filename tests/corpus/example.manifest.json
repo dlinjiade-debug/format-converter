@@ -1,0 +1,21 @@
+{
+  "template": true,
+  "description": "TEMPLATE ONLY, not actual cases or passed regressions. Copy outside the repository, remove template:true, and select private PPTX/DOCX sources plus independently exported Office/WPS reference PDFs. Paths are relative to this manifest or absolute. The runner never generates a reference. Outputs must be outside the repository.",
+  "thresholds": { "ssim": 0.93, "foregroundIoU": 0.8 },
+  "targetWidth": 640,
+  "cases": [
+    {
+      "id": "presentation-template",
+      "source": "<LOCAL_PRIVATE_DIRECTORY>/presentation.pptx",
+      "referencePDF": "<LOCAL_PRIVATE_DIRECTORY>/presentation-office-reference.pdf",
+      "expectedPages": 3,
+      "provenance": { "referenceApplication": "REPLACE with Microsoft PowerPoint or WPS version and export settings", "kind": "REPLACE with actual source provenance" }
+    },
+    {
+      "id": "document-template",
+      "source": "<LOCAL_PRIVATE_DIRECTORY>/document.docx",
+      "referencePDF": "<LOCAL_PRIVATE_DIRECTORY>/document-office-reference.pdf",
+      "provenance": { "referenceApplication": "REPLACE with Microsoft Word or WPS version and export settings", "kind": "REPLACE with actual source provenance" }
+    }
+  ]
+}

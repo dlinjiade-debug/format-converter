@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync,mkdirSync,writeFileSync,readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { _electron as electron } from 'playwright';
+import { repoPath } from './paths.mjs';
+import { buildFixture } from './fixture-factory.mjs';
+const temp=mkdtempSync(join(tmpdir(),'format-converter-desktop-'));
+for(const name of ['input','output','reference'])mkdirSync(join(temp,name));
+writeFileSync(join(temp,'input','native-source.pptx'),await buildFixture({kind:'visual'}));
+const packaged=process.argv[2];
+const app=await electron.launch({...(packaged?{executablePath:repoPath(packaged),args:[]}:{args:[repoPath()]}),env:{...process.env,FORMAT_CONVERTER_TEST_DATA:join(temp,'profile'),FORMAT_CONVERTER_TEST_HIDDEN:'1'},timeout:60000});
+try{
+ if(packaged)assert.ok(await app.evaluate(({app})=>app.getAppPath().endsWith('.asar')),'native packaged verification must actually use app.asar');
+ const page=await app.firstWindow(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.waitForFunction(()=>!!window.desktopBridge&&!!document.querySelector('#workbenchSettings'));
+ const security=await page.evaluate(()=>({node:typeof window.require,bridge:Object.isFrozen(window.desktopBridge)}));assert.equal(security.node,'undefined');assert.equal(security.bridge,true);
+ await app.evaluate(({dialog},dirs)=>{let n=0;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[dirs[n++]]})},['input','output','reference'].map(n=>join(temp,n)));
+ await page.locator('#workbenchSettings summary').click();
+ for(const kind of ['input','output','reference'])await page.locator('#choose-'+kind).click();
+ const settings=await page.evaluate(()=>desktopBridge.getSettings());assert.equal(settings.paths.output,join(temp,'output'));
+ await page.locator('#directorySettings .wb-path').first().getByRole('button',{name:'列出文件'}).click();
+ await page.getByRole('button',{name:'native-source.pptx',exact:true}).click();
+ await page.locator('#fg .fb').filter({hasText:'.pdf'}).click();await page.locator('#go').click();
+ await page.waitForFunction(()=>document.querySelector('#previewPage')?.textContent.includes('1 / 1'),{timeout:30000});
+ await page.locator('#res .dl').click();await page.waitForFunction(()=>document.querySelector('#res .rs')?.textContent.startsWith('已保存到：'));
+ const output=join(temp,'output','native-source.pdf');assert.equal(readFileSync(output).subarray(0,4).toString(),'%PDF');
+ await page.locator('#res .dl').click();await page.waitForFunction(()=>document.querySelector('#res .rs')?.textContent.includes('(1).pdf'));
+ assert.ok(readFileSync(join(temp,'output','native-source (1).pdf')).length>1000);
+ await page.reload();await page.waitForFunction(()=>!!window.desktopBridge);
+ assert.equal((await page.evaluate(()=>desktopBridge.getSettings())).paths.output,settings.paths.output);
+ await assert.rejects(page.evaluate(()=>desktopBridge.readFile('../private')));
+ assert.deepEqual(errors,[]);
+ console.log({packaged:!!packaged,desktop:'native select → convert → preview → save → collision-safe save → persisted settings',output,errors});
+}finally{await app.close()}

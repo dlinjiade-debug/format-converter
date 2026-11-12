@@ -1,0 +1,14 @@
+* text=auto
+*.html text eol=lf
+*.mjs text eol=lf
+*.js text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+# Vendored byte-for-byte assets retain their upstream bytes and checksums.
+lib/** -text
+lib/ffmpeg/ffmpeg-core.js -whitespace
+lib/docx-preview.LICENSE.txt -whitespace
+lib/docx-preview.browser.js -whitespace
+lib/svg2pdf.LICENSE.txt -whitespace
+lib/svg2pdf.browser.js -whitespace

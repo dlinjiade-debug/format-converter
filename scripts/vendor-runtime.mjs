@@ -1,0 +1,21 @@
+// Reproducible vendoring of pinned runtime packages. No runtime CDN requests.
+import { readFileSync, writeFileSync, copyFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+const preview=readFileSync('node_modules/docx-preview/dist/docx-preview.js','utf8');
+if(!preview.includes('global.docx = {}'))throw new Error('Review docx-preview UMD export before updating');
+writeFileSync('lib/docx-preview.browser.js',preview.replace('global.docx = {}','global.docxPreview = {}'));
+copyFileSync('node_modules/docx-preview/LICENSE','lib/docx-preview.LICENSE.txt');
+copyFileSync('node_modules/dompurify/dist/purify.min.js','lib/purify.min.js');
+copyFileSync('node_modules/html2canvas/dist/html2canvas.min.js','lib/html2canvas.min.js');
+copyFileSync('node_modules/html2canvas/LICENSE','lib/html2canvas.LICENSE.txt');
+const svg=readFileSync('node_modules/svg2pdf.js/dist/svg2pdf.umd.js','utf8');
+if(!svg.includes('factory(global.svg2pdf = {}, global.jspdf)'))throw new Error('Review SVG UMD export before updating');
+writeFileSync('lib/svg2pdf.browser.js',svg.replace('factory(global.svg2pdf = {}, global.jspdf)','factory(global.SvgToPdf = {}, global.jspdf)'));
+copyFileSync('node_modules/svg2pdf.js/LICENSE','lib/svg2pdf.LICENSE.txt');
+for(const name of ['ffmpeg-core.js','ffmpeg-core.wasm'])copyFileSync('node_modules/@ffmpeg/core/dist/umd/'+name,'lib/ffmpeg/'+name);
+for(const name of ['ffmpeg.js','814.ffmpeg.js'])copyFileSync('node_modules/@ffmpeg/ffmpeg/dist/umd/'+name,'lib/ffmpeg/'+name);
+console.log('Vendored docx-preview (isolated global), DOMPurify and matching FFmpeg 0.12 single-thread packages');
+const files=readdirSync('lib',{recursive:true}).map(path=>'lib/'+path.replaceAll('\\','/')).filter(path=>/\.(?:js|wasm)$/.test(path)).sort();
+const manifest=files.map(path=>path.padEnd(42)+' '+createHash('sha256').update(readFileSync(path)).digest('hex').toUpperCase()).join('\n');
+const notice=readFileSync('THIRD_PARTY_NOTICES.md','utf8');
+writeFileSync('THIRD_PARTY_NOTICES.md',notice.replace(/```text[\s\S]*?```/,'```text\n'+manifest+'\n```'));

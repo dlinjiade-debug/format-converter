@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { launchBrowser, repoFileUrl, repoPath } from './helpers.mjs';
+import { ensureFixtures } from './fixture-factory.mjs';
 
-const fixturePath = repoPath('tests', 'fixtures', 'stress-text-25-16x9.pptx');
+const fixturePath = (await ensureFixtures()) + '/stress-text-25-16x9.pptx';
 const b64 = readFileSync(fixturePath).toString('base64');
 const browser = await launchBrowser();
 const page = await browser.newPage();

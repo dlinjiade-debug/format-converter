@@ -1,13 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { launchBrowser, repoFileUrl, repoPath } from './helpers.mjs';
+import { ensureFixtures } from './fixture-factory.mjs';
 
-const defaults = [
-  repoPath('tests', 'fixtures', 'stress-text-25-16x9.pptx'),
-  repoPath('tests', 'fixtures', 'stress-image-25-4x3.pptx'),
-  repoPath('tests', 'fixtures', 'stress-mixed-40-16x9.pptx'),
-];
-const files = process.argv.slice(2).length ? process.argv.slice(2).map(resolve) : defaults;
+const dir = await ensureFixtures();
+const defaults = ['stress-text-25-16x9.pptx','stress-image-25-4x3.pptx','stress-mixed-40-16x9.pptx'].map(name => resolve(dir,name));
+const files = process.argv.slice(2).length ? process.argv.slice(2).map(path => resolve(path)) : defaults;
 
 const browser = await launchBrowser();
 const page = await browser.newPage();

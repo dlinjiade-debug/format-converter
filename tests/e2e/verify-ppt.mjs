@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { launchBrowser, repoFileUrl, repoPath } from './helpers.mjs';
+import { ensureFixtures } from './fixture-factory.mjs';
 
-const pptxPath = resolve(process.argv[2] || repoPath('tests', 'fixtures', 'stress-text-25-16x9.pptx'));
-const expectedPages = Number(process.argv[3] || 0);
+const pptxPath = resolve(process.argv[2] || (await ensureFixtures()) + '/stress-text-25-16x9.pptx');
+const expectedPages = Number(process.argv[3] || (process.argv[2] ? 0 : 25));
 const b64 = readFileSync(pptxPath).toString('base64');
 
 const browser = await launchBrowser();

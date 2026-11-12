@@ -1,20 +1,26 @@
 {
   "name": "format-converter",
-  "version": "1.0.0",
-  "description": "一个纯浏览器端的文件格式转换工具，无需安装任何软件，打开网页即可使用。",
-  "main": "index.js",
-  "directories": {
-    "lib": "lib",
-    "test": "tests"
-  },
+  "version": "1.1.0",
+  "description": "本地处理的文件格式转换器，提供公开网页和可设置路径的 Windows 便携软件。",
+  "main": "desktop/main.cjs",
   "scripts": {
+    "desktop": "electron .",
+    "build:desktop": "electron-builder --win portable --x64 --publish never",
+    "test:desktop": "node --test tests/desktop.test.cjs && node tests/e2e/verify-desktop.mjs",
+    "test:packaged": "node tests/e2e/verify-desktop.mjs dist/win-unpacked/FormatConverter.exe && node tests/e2e/verify-packaged.mjs",
+    "test:corpus": "node --test tests/visual-metrics.test.cjs tests/corpus/corpus.test.mjs tests/corpus/browser.test.mjs",
+    "corpus": "node scripts/corpus.mjs",
+    "build:site": "node scripts/build-public-site.mjs",
+    "test:workbench": "node tests/e2e/verify-workbench.mjs && node tests/e2e/verify-svg-vector.mjs && node tests/e2e/verify-release-fixes.mjs",
+    "vendor": "node scripts/vendor-runtime.mjs",
     "test": "node tests/conversion-quality.test.js",
-    "test:ppt": "node tests/e2e/verify-ppt.mjs",
+    "test:ppt": "node tests/e2e/verify-ppt.mjs && node tests/e2e/verify-ppt-visual.mjs && node tests/e2e/verify-ppt-streaming.mjs",
     "test:pdf": "node tests/e2e/verify-pdf.mjs",
     "test:security": "node tests/e2e/security.mjs",
-    "test:e2e": "npm run test:security && npm run test:pdf && node tests/e2e/verify-pdf-text.mjs && node tests/e2e/verify-word.mjs && npm run test:ppt",
+    "test:regressions": "node tests/e2e/verify-regressions.mjs && node tests/e2e/verify-workflow.mjs && node tests/e2e/verify-media.mjs && node tests/e2e/verify-review-fixes.mjs",
+    "test:e2e": "npm run test:security && npm run test:pdf && node tests/e2e/verify-pdf-text.mjs && node tests/e2e/verify-word.mjs && node tests/e2e/verify-word-layout.mjs && npm run test:regressions && npm run test:ppt",
     "test:stress": "node tests/e2e/stress.mjs",
-    "test:all": "npm test && npm run test:e2e && npm run test:stress"
+    "test:all": "npm test && node --test tests/desktop.test.cjs && npm run test:corpus && npm run test:e2e && npm run test:workbench && npm run test:stress"
   },
   "repository": {
     "type": "git",
@@ -27,8 +33,24 @@
     "url": "https://github.com/dlinjiade-debug/format-converter/issues"
   },
   "homepage": "https://github.com/dlinjiade-debug/format-converter#readme",
+  "build": {
+    "appId": "io.github.dlinjiade.formatconverter",
+    "productName": "linjiade转换器",
+    "asar": true,
+    "directories": {"output": "dist"},
+    "files": ["index.html", "lib/**/*", "desktop/**/*", "package.json", "!lib/ffmpeg/ffmpeg.min.js", "!lib/ffmpeg/ffmpeg-core.worker.js"],
+    "win": {"target": [{"target": "portable", "arch": ["x64"]}], "executableName": "FormatConverter", "signAndEditExecutable": false},
+    "portable": {"artifactName": "FormatConverter-${version}-windows-x64.exe"}
+  },
   "devDependencies": {
-    "dompurify": "3.4.12",
-    "playwright": "1.47.2"
+    "@ffmpeg/core": "0.12.10",
+    "@ffmpeg/ffmpeg": "0.12.15",
+    "docx-preview": "0.4.1",
+    "dompurify": "3.4.17",
+    "electron": "45.3.0",
+    "electron-builder": "26.18.0",
+    "html2canvas": "1.4.1",
+    "playwright": "1.65.0",
+    "svg2pdf.js": "2.9.0"
   }
 }

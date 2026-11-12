@@ -5,3 +5,7 @@ node_modules/
 math-tutor-deck/
 output/
 tests/e2e/debug/
+dist/
+.site/
+tests/corpus/local*.json
+corpus-output/

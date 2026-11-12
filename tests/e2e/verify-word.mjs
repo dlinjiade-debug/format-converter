@@ -78,7 +78,21 @@ const result = await page.evaluate(async base64 => {
   } finally {
     await pdf.destroy();
   }
+  const layoutResult = await window.word2pdfResult(input, true);
+  const layoutPdf = await window.openPdf(layoutResult.blob);
+  let layoutPink = 0;
+  const layoutPages = layoutPdf.numPages;
+  try {
+    for (let i = 1; i <= layoutPages; i++) {
+      const canvas = await window.renderPage(layoutPdf, i, .75);
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      for (let p = 0; p < data.length; p += 4) if (data[p] > 180 && data[p + 1] < 190 && data[p + 2] < 210) layoutPink++;
+      canvas.width = canvas.height = 0;
+    }
+  } finally { await layoutPdf.destroy(); }
   return {
+    layoutPages,
+    layoutPink,
     size: blob.size,
     pageCount: pages.length,
     nonWhite: pages,
@@ -92,6 +106,8 @@ const result = await page.evaluate(async base64 => {
 await browser.close();
 console.log(JSON.stringify({ result, errors }, null, 2));
 const ok = result.size > 0
+  && result.layoutPages === 2
+  && result.layoutPink > 100
   && result.pageCount === 2
   && result.nonWhite.every(value => value > 50)
   && result.imageLikePages >= 2

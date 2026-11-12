@@ -1,120 +1,89 @@
-# 🔄 文件格式转换器
+# linjiade 转换器
 
-一个纯浏览器端的文件格式转换工具，无需安装任何软件，打开网页即可使用。
+同一个转换核心，提供 Windows 便携软件与公开网页。文件在使用者自己的设备上处理，不上传到转换服务器。
 
-## 功能特性
+- [公开网站](https://dlinjiade-debug.github.io/format-converter/)：保留主分支独立更新的 Office 引擎与首页。
+- [增强工作台](https://dlinjiade-debug.github.io/format-converter/workbench/)：预检、逐页预览、字体和路径设置。
+- [Windows 便携软件](https://github.com/dlinjiade-debug/format-converter/releases/download/v1.1.0/FormatConverter-1.1.0-windows-x64.exe)：下载后运行，无需安装 Python、Office 或 LibreOffice。当前为未签名版本，发布页提供 SHA-256 校验值。
 
-- **拖拽上传** — 支持拖拽或点击选择文件
-- **智能格式检测** — 自动识别源格式，显示可用的目标格式
-- **多格式支持** — 文档、图片、视频、音频、Markdown、HTML
-- **即时下载** — 转换完成后自动下载
-- **纯本地处理** — 文件不上传到任何服务器，保护隐私
-- **零依赖** — 不需要安装 Python、FFmpeg 等任何环境
+## 路径与使用
 
-## 支持的转换
+打开“输出、字体与路径设置”：
 
-| 源格式 | 可转换为 |
-|--------|----------|
-| PDF | Word、TXT、HTML |
-| Word | PDF、HTML、TXT |
-| PPT | PDF、PNG |
-| Excel | CSV、HTML |
-| CSV | Excel、TXT、HTML |
-| Markdown | HTML、PDF、Word |
-| HTML | PDF、TXT、Markdown、Word |
-| PNG/JPG/WebP/BMP/GIF/SVG | 图片互转、PDF |
-| TXT | PDF、Word |
-| MP4/MOV/AVI/MKV/WMV/FLV | MP4、GIF、WebM |
-| WebM | GIF、MP4 |
-| MP3/WAV/OGG/AAC/FLAC | 音频格式互转 |
+1. 桌面端选择输入、输出、参考 PDF 目录。输入/参考目录可列出文件，点击文件即可选择；设置在本机用户配置目录中持久保存。
+2. 网页端可在支持的浏览器中授权目录。浏览器只显示授权目录名，不能访问任意磁盘路径；不支持目录授权的浏览器仍可选择文件和普通下载。
+3. 选择文件后自动预检页数、媒体对象和可能缺失的字体；点击开始转换，查看逐页预览，再点击下载/保存。
+4. 桌面端保存到设置的输出目录；未设置时打开原生保存窗口。同名结果自动另存，不覆盖已有文件。
+5. 可选择 Office/WPS 导出的参考 PDF，在结果预览中逐页比较，下载差异报告。
 
-## 使用方法
+中文或特殊字符的可搜索文字需要可嵌入的相应字体。可加载本地 TTF 并填写源字体名或别名；字体仅在当前会话使用，不上传、不自动提交进仓库。
 
-直接打开 https://dlinjiade-debug.github.io/format-converter/ 即可使用。
+## 转换能力
 
-或克隆仓库用浏览器打开 `index.html`：
+| 输入 | 输出 |
+| --- | --- |
+| PDF | Word、TXT、HTML、PNG/JPG；多页图片打包 ZIP |
+| DOCX | PDF（版式/正文模式）、HTML、TXT |
+| PPTX | PDF、PNG；多页 PNG 打包 ZIP |
+| Excel/CSV | CSV、XLSX、HTML、TXT，依具体输入格式显示 |
+| Markdown/HTML/TXT | 文档、网页、PDF |
+| 图片/SVG/HEIC | 图片互转、PDF；普通 SVG 可保留矢量和文字 |
+| 视频/音频 | FFmpeg/LAME 实际编码，依界面显示格式 |
 
-```bash
-git clone https://github.com/dlinjiade-debug/format-converter.git
-cd format-converter
-# 直接用浏览器打开 index.html
-```
+旧 .doc 需要先在 Word/WPS 另存为 .docx。扫描件不内置 OCR。
 
-## 项目结构
+## 保真与性能
 
-```
-format-converter/
-├── index.html          # 全部功能 (HTML/CSS/JS)
-├── lib/                # 本地打包的第三方库（jsPDF / mammoth / html2pdf / docx / pdf.js / XLSX / ffmpeg 等），无需联网即可加载
-└── README.md
-```
+- PPT、Word 的自动 PDF 输出保留页面图外观，并尽可能添加可搜索源文字层；这不等同于完整的矢量/可编辑 Office 重建。
+- 缺少字形时明确提示，保留页面外观；不会把错误编码冒充可搜索中文。
+- PPT 主渲染失败默认停止输出，主动勾选简化兼容选项后才降级。系统打印是另一条输出路径。
+- 画质可选择自动、清晰或体积优先，按设备和像素预算控制画布；Word/HTML 按页截图，页处理后释放画布与媒体 URL。
+- 输出 PDF 逐页预览并提示疑似空白，不自动下载。预览切页、换文件和取消任务会释放相应资源。
+- 3D、动画、视频、OLE、部分 EMF/WMF、浮动排版、自动分页和无边框表格仍可能与 Office 不同，需要真实文件验收。
+- 网页通过静态 HTTP(S) 访问即可使用视频/OGG，无需跨源隔离。直接双击 file:// 时浏览器可能禁止读取 WASM；桌面软件不受这个入口限制。
 
-> 第三方库已下载到 `lib/` 并改为本地引用，运行时不再依赖 jsdelivr / unpkg / cdnjs 等 CDN，国内网络下也不会再出现"库加载失败"。
+## 开发与构建
 
-## PPT → PDF 渲染说明（重要）
-
-PPT 里**整页图片型幻灯片**（常见于设计稿/海报/截图导出）依赖 `<p:pic>` 元素承载背景图。转换器会：
-
-1. `pptParse` 解析 `ppt/slides/slideN.xml`，按文档顺序收集 `<p:sp>`（文字）、`<p:pic>`（图片）、`<p:graphicFrame>`（图表/表格）三类形状，图层叠放顺序与 PowerPoint 一致；
-2. 通过 `ppt/slides/_rels/slideN.xml.rels` 把图片 `r:embed` 映射到 `ppt/media/*.png`（属性顺序无关、路径自动归一化）；
-3. `pptRenderSlide` 把每个形状画到 Canvas（2x 高清），`ppt2pdf` 按真实宽高比铺进 PDF，避免拉伸变形。
-
-> 若转换出来一片空白，多半是 `<p:pic>`（图片）未被解析或图片关系映射失败——这类问题已修复。
-
-## 自动化测试（开发用）
-
-位于 `tests/e2e/`，仅用于本地验证，不影响网页功能：
-
-- `lib/jszip.min.js` — 已本地化的 JSZip（fixture 生成复用，无需联网）
-- `tests/e2e/gen-fixtures.mjs` — 生成压测样本：纯文字 16:9、纯图片 4:3、混合 16:9
-- `tests/e2e/verify-ppt.mjs <样本.pptx>` — 单文件验证（页数/非白像素/PDF 导出）
-- `tests/e2e/stress.mjs [文件...]` — 批量压测，输出解析/渲染/导出耗时与稳定性
-
-> Playwright 与 Chromium 缓存放在项目内 `.pw-browsers/`（约 140MB），`node_modules` 也在项目内，**不写入 C 盘**。
-
-## 技术栈
-
-- **纯前端**: 原生 HTML/CSS/JS（零依赖）
-- **转换引擎**: FFmpeg.wasm（视频/音频）、PDF.js（PDF）、Mammoth.js（Word）、jsPDF（PDF生成）、marked（Markdown）、XLSX.js（Excel）
-- **托管**: GitHub Pages
-
-## 注意事项
-
-- 视频/音频转换首次需要加载 FFmpeg.wasm 核心文件（约 25MB），请耐心等待
-- 建议使用 Chrome/Edge/Firefox 最新版本
-- 处理大文件时请确保有足够内存
-
-## 转换稳定性说明
-
-- PPT→PDF 优先使用固定版本的本地 `@aiden0z/pptx-renderer` 1.2.4；旧解析器保留为 fallback。遇到 3D、动画、OLE、部分 EMF/WMF 等能力时会显示 warning，不会静默生成空白页。
-- PDF→Word 提供文本优先和版式优先两种模式。图片型 PDF 会逐页嵌入完整页面图，并明确提示“正文不可编辑”；项目不内置 OCR。
-- Word→PDF 使用 HTML/CSS 中间层，等待图片和字体加载，保留表格、图片、分页，并使用 `break-inside: avoid` 降低空白页、裁切和重叠风险。
-- 所有文档 HTML 进入 DOM 或导出前都会经过本地 DOMPurify 清理；文件名和错误信息不会直接作为 HTML 插入。
-
-## 自动化验证
-
-需要 Node.js 20+。首次运行先安装依赖和 Chromium：
+需要 Node.js 22.12+，本次在 Windows x64 验证。依赖固定在 package-lock.json：
 
 ```bash
 npm ci
-# Windows PowerShell: $env:PLAYWRIGHT_BROWSERS_PATH='.pw-browsers'
+npm run vendor
 npx playwright install chromium
-npm run test:all
+npm run desktop
+npm run build:desktop
 ```
 
-Windows PowerShell 若执行策略拦截 `npm`，可将上述命令中的 `npm` 改为 `npm.cmd`。也可以分开运行：
+便携 EXE 输出到 dist/。桌面端 sandbox/contextIsolation 开启，网页无 Node 权限；原生文件读写仅通过主进程验证的目录授权和文件 ID。
+
+运行库在 lib/ 中本地加载，运行时不访问 CDN。来源、许可证、变更和校验和见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 测试
 
 ```bash
-npm run test:ppt       # 25 页真实 PPT→PDF 页数、比例、非白页、页序
-npm run test:pdf       # 图片型 PDF→Word
-npm run test:security  # HTML 清理、外链拦截、Blob URL 释放
-npm run test:stress    # 25/25/40 页 PPT 批量压测
+npm run test:all        # 浏览器转换、预览、字体、真实编码、指标工具、25/25/40 页压测
+npm run test:desktop    # 路径边界 + 隐藏原生窗口的完整保存流程
+npm run test:corpus     # 对比工具自身的合成测试，不代表真实文件已通过
+npm run test:packaged   # app.asar 完整转换保存 + 便携 EXE 实际启动
+node tests/e2e/verify-public-site.mjs  # build:site 后，验证子路径资源和转换
 ```
 
-测试浏览器默认缓存到项目内的 `.pw-browsers/`，不会写入 C 盘；该目录、`node_modules/`、导出文件和调试截图均被 `.gitignore` 排除。第三方包的来源、许可证和 SHA-256 见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+Windows 文件符号链接测试可能因缺少 Developer Mode/admin 权限而跳过；目录 junction 逃逸测试仍执行。浏览器缓存位于 .pw-browsers/，构建输出、用户文件和验收输出不提交。
 
-## 已知限制
+## 真实文件回归库
 
-- 图片型 PDF 不做 OCR，因此页面图完整但正文不可编辑。
-- 复杂 PowerPoint 的 3D、动画、OLE、部分 EMF/WMF 和高级图表效果可能降级，并通过 warning 告知。
-- 浏览器端转换受内存限制；大文件或高页数文档建议分批处理。
+不生成“自己的参考答案”来证明自己正确。将 [清单模板](tests/corpus/example.manifest.json) 复制到仓库外，选择真实 PPTX/DOCX 与独立的 Office/WPS 导出 PDF，填写来源，删除 template:true，再运行：
+
+```bash
+node scripts/corpus.mjs --manifest "D:/验收/manifest.json" --output "D:/验收/报告"
+```
+
+报告包含源文件/参考文件 SHA-256、转换器版本、浏览器版本、页数/尺寸、文字覆盖和逐页前景 IoU/SSIM。空白背景不会稀释缺失图形的分数。阈值用于定位回归，不能取代人工核对。未配置真实文件时工具明确报错，不会标记通过。
+
+## 公开网站发布
+
+npm run build:site 将 origin/master 的现有首页/vendor 保留在站点根目录，并把本分支工作台放在 /workbench/。公开产物只包含静态网页资源，不包含私有目录设置、测试源文件、Node 模块或 EXE。GitHub Pages 使用独立的 codex/public-site 发布分支；源代码仍在 codex/conversion-stability 审查分支，不覆盖主分支的新 Office 引擎。
+
+## 设计参考
+
+参考 [VERT](https://github.com/VERT-sh/VERT) 的多引擎和任务管理思路、[PPTist](https://github.com/pipipi-pikachu/PPTist) 的打印流程、[pdf2docx](https://github.com/ArtifexSoftware/pdf2docx) 的区域分析；没有复制这些项目的实现。Word 版式渲染采用 Apache-2.0 的 [docxjs](https://github.com/VolodymyrBaydalka/docxjs)。

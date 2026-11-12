@@ -29,6 +29,10 @@ const pdfBase64 = await page.evaluate(font => {
     doc.text(`Table A${i + 1}`, 60, y);
     doc.text(`Table B${i + 1}`, 300, y);
   }
+  // A table has independent ruling-line evidence; close baselines alone can
+  // also describe two-column body text and must not imply a table.
+  for (const y of [204,226,248,270,292]) doc.line(50,y,470,y);
+  for (const x of [50,285,470]) doc.line(x,204,x,292);
   const canvas = document.createElement('canvas');
   canvas.width = 48;
   canvas.height = 36;
